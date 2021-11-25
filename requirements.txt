@@ -1,0 +1,4 @@
+python-dotenv
+autopep8
+pyteal
+jupyterlab
