@@ -2,7 +2,7 @@
 # It is not intended for production use.
 # This example does not constitute trading advice.
 
-from swap.operations.client import TinymanTestnetClient
+from swap.operations.client import AlgoverseTestnetClient
 
 
 # Hardcoding account keys is not a great practice. This is for demonstration purposes only.
@@ -12,7 +12,7 @@ account = {
     'private_key': 'base64_private_key_here', # Use algosdk.mnemonic.to_private_key(mnemonic) if necessary
 }
 
-client = TinymanTestnetClient(user_address=account['address'])
+client = AlgoverseTestnetClient(user_address=account['address'])
 # By default all subsequent operations are on behalf of user_address
 
 # Fetch our two assets of interest

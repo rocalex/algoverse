@@ -7,7 +7,7 @@ from algosdk.v2client.algod import AlgodClient
 
 from .bootstrap import prepare_bootstrap_transactions
 from .burn import prepare_burn_transactions
-from .client import TinymanClient
+from .client import AlgoverseClient
 from .contracts import get_pool_logicsig
 from .mint import prepare_mint_transactions
 from .optin import prepare_asset_optin_transactions
@@ -73,7 +73,7 @@ def get_pool_info_from_account_info(account_info):
 
 def get_excess_asset_key(pool_address, asset_id):
     a = decode_address(pool_address)
-    key = b64encode(a + b'e' + (asset_id).to_bytes(8, 'big'))
+    key = b64encode(a + b'e' + asset_id.to_bytes(8, 'big'))
     return key
 
 
@@ -134,7 +134,7 @@ class BurnQuote:
 
 
 class Pool:
-    def __init__(self, client: TinymanClient, asset_a: Asset, asset_b: Asset, info=None, fetch=True, validator_app_id=None) -> None:
+    def __init__(self, client: AlgoverseClient, asset_a: Asset, asset_b: Asset, info=None, fetch=True, validator_app_id=None) -> None:
         self.client = client
         self.validator_app_id = validator_app_id if validator_app_id is not None else client.validator_app_id
 
@@ -158,6 +158,10 @@ class Pool:
         self.unclaimed_protocol_fees = None
         self.outstanding_asset1_amount = None
         self.outstanding_asset2_amount = None
+        self.outstanding_liquidity_asset_amount = None
+        self.algo_balance = None
+        self.min_balance = None
+
         self.last_refreshed_round = None
 
         if fetch:

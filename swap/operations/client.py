@@ -6,10 +6,9 @@ from algosdk.encoding import encode_address
 from ..utils import wait_for_confirmation
 from ..assets import Asset, AssetAmount
 from .optin import prepare_app_optin_transactions, prepare_asset_optin_transactions
-from .constants import TESTNET_VALIDATOR_APP_ID, MAINNET_VALIDATOR_APP_ID
 
 
-class TinymanClient:
+class AlgoverseClient:
     def __init__(self, algod_client: AlgodClient, validator_app_id: int, user_address=None):
         self.algod = algod_client
         self.validator_app_id = validator_app_id
@@ -96,17 +95,3 @@ class TinymanClient:
             if a['asset-id'] == asset_id:
                 return True
         return False
-
-
-class TinymanTestnetClient(TinymanClient):
-    def __init__(self, algod_client=None, user_address=None):
-        if algod_client is None:
-            algod_client = AlgodClient('', 'https://api.testnet.algoexplorer.io', headers={'User-Agent': 'algosdk'})
-        super().__init__(algod_client, validator_app_id=TESTNET_VALIDATOR_APP_ID, user_address=user_address)
-
-
-class TinymanMainnetClient(TinymanClient):
-    def __init__(self, algod_client=None, user_address=None):
-        if algod_client is None:
-            algod_client = AlgodClient('', 'https://api.algoexplorer.io', headers={'User-Agent': 'algosdk'})
-        super().__init__(algod_client, validator_app_id=MAINNET_VALIDATOR_APP_ID, user_address=user_address)

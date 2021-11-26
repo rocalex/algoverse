@@ -10,7 +10,7 @@ from swap.operations.pools import Pool
 from swap.assets import Asset
 from swap.utils import wait_for_confirmation
 from algosdk.v2client.algod import AlgodClient
-from swap.operations.client import TinymanClient
+from swap.operations.client import AlgoverseClient
 
 
 # Hardcoding account keys is not a great practice. This is for demonstration purposes only.
@@ -23,7 +23,7 @@ account = {
 
 algod = AlgodClient('', 'https://api.testnet.algoexplorer.io', headers={'User-Agent': 'algosdk'})
 
-client = TinymanClient(
+client = AlgoverseClient(
     algod_client=algod,
     validator_app_id=21580889,
 )
