@@ -1,10 +1,12 @@
 from algosdk.future.transaction import ApplicationOptInTxn, PaymentTxn, AssetCreateTxn, AssetOptInTxn
+from algosdk.v2client.algod import AlgodClient
 
-from .contracts import get_pool_logicsig
+from . import get_pool_logicsig
 from ..utils import int_to_bytes, TransactionGroup
 
 
 def prepare_bootstrap_transactions(
+        client: AlgodClient,
         validator_app_id: int,
         asset1_id: int,
         asset2_id: int,
@@ -13,7 +15,7 @@ def prepare_bootstrap_transactions(
         sender: str,
         suggested_params
 ):
-    pool_logicsig = get_pool_logicsig(validator_app_id, asset1_id, asset2_id)
+    pool_logicsig = get_pool_logicsig(client, validator_app_id, asset1_id, asset2_id)
     pool_address = pool_logicsig.address()
 
     assert (asset1_id > asset2_id)

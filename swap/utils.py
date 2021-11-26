@@ -1,6 +1,19 @@
 from base64 import b64decode, b64encode
 from algosdk.future.transaction import LogicSigTransaction, assign_group_id
 from algosdk.error import AlgodHTTPError
+from algosdk.v2client.algod import AlgodClient
+
+
+def get_algod_client(url, token) -> AlgodClient:
+    headers = {
+        'X-API-Key': token
+    }
+    return AlgodClient(token, url, headers)
+
+
+def fully_compile_contract(client: AlgodClient, teal) -> bytes:
+    response = client.compile(teal)
+    return b64decode(response["result"])
 
 
 def get_program(definition, variables=None):

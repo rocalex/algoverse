@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from algosdk.encoding import decode_address
 from algosdk.v2client.algod import AlgodClient
 
+from . import get_pool_logicsig
+
 from .bootstrap import prepare_bootstrap_transactions
 from .burn import prepare_burn_transactions
 from .client import AlgoverseClient
-from .contracts import get_pool_logicsig
 from .mint import prepare_mint_transactions
 from .optin import prepare_asset_optin_transactions
 from .redeem import prepare_redeem_transactions
@@ -18,13 +19,13 @@ from ..utils import get_state_int
 
 
 def get_pool_info(client: AlgodClient, validator_app_id, asset1_id, asset2_id):
-    pool_logicsig = get_pool_logicsig(validator_app_id, asset1_id, asset2_id)
+    pool_logicsig = get_pool_logicsig(client, validator_app_id, asset1_id, asset2_id)
     pool_address = pool_logicsig.address()
     account_info = client.account_info(pool_address)
-    return get_pool_info_from_account_info(account_info)
+    return get_pool_info_from_account_info(client, account_info)
 
 
-def get_pool_info_from_account_info(account_info):
+def get_pool_info_from_account_info(client, account_info):
     try:
         validator_app_id = account_info['apps-local-state'][0]['id']
     except IndexError:
@@ -34,7 +35,7 @@ def get_pool_info_from_account_info(account_info):
     asset1_id = get_state_int(validator_app_state, 'a1')
     asset2_id = get_state_int(validator_app_state, 'a2')
 
-    pool_logicsig = get_pool_logicsig(validator_app_id, asset1_id, asset2_id)
+    pool_logicsig = get_pool_logicsig(client, validator_app_id, asset1_id, asset2_id)
     pool_address = pool_logicsig.address()
 
     assert(account_info['address'] == pool_address)
@@ -201,7 +202,7 @@ class Pool:
             self.asset2_reserves = (self.algo_balance - self.min_balance) - self.outstanding_asset2_amount
     
     def get_logicsig(self):
-        pool_logicsig = get_pool_logicsig(self.validator_app_id, self.asset1.id, self.asset2.id)
+        pool_logicsig = get_pool_logicsig(self.client.algod, self.validator_app_id, self.asset1.id, self.asset2.id)
         return pool_logicsig
     
     @property
@@ -366,6 +367,7 @@ class Pool:
         swapper_address = swapper_address or self.client.user_address
         suggested_params = self.client.algod.suggested_params()
         txn_group = prepare_swap_transactions(
+            client=self.client.algod,
             validator_app_id=self.validator_app_id,
             asset1_id=self.asset1.id,
             asset2_id=self.asset2.id,
@@ -391,6 +393,7 @@ class Pool:
         pooler_address = pooler_address or self.client.user_address
         suggested_params = self.client.algod.suggested_params()
         txn_group = prepare_bootstrap_transactions(
+            client=self.client.algod,
             validator_app_id=self.validator_app_id,
             asset1_id=self.asset1.id,
             asset2_id=self.asset2.id,
@@ -434,6 +437,7 @@ class Pool:
         asset2_amount = amounts_out[self.asset2]
         suggested_params = self.client.algod.suggested_params()
         txn_group = prepare_burn_transactions(
+            client=self.client.algod,
             validator_app_id=self.validator_app_id,
             asset1_id=self.asset1.id,
             asset2_id=self.asset2.id,
@@ -457,6 +461,7 @@ class Pool:
         user_address = user_address or self.client.user_address
         suggested_params = self.client.algod.suggested_params()
         txn_group = prepare_redeem_transactions(
+            client=self.client.algod,
             validator_app_id=self.validator_app_id,
             asset1_id=self.asset1.id,
             asset2_id=self.asset2.id,

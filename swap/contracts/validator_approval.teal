@@ -50,14 +50,15 @@ txn OnCompletion
 int UpdateApplication
 ==
 txn OnCompletion
-int DeleteApplication
-==
-||
-txn OnCompletion
 int CloseOut
 ==
 ||
 bnz fail
+
+txn OnCompletion
+int DeleteApplication
+==
+bnz success  // test purpose, fail when deploy
 
 // Pooler/Swapper Optin
 txn OnCompletion
