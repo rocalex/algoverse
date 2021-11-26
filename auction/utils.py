@@ -1,11 +1,9 @@
 from base64 import b64decode
-from typing import Dict, Union, List, Any, Optional
+from typing import Dict, Tuple, Union, List, Any, Optional
 
 from algosdk import encoding
 from algosdk.v2client.algod import AlgodClient
 from pyteal import compileTeal, Expr, Mode
-
-from account import Account
 
 
 def get_algod_client(url, token) -> AlgodClient:
@@ -34,7 +32,7 @@ class PendingTxnResponse:
         self.logs: List[bytes] = [b64decode(ll) for ll in response.get("logs", [])]
 
 
-def wait_for_transaction(
+def wait_for_confirmation(
         client: AlgodClient, tx_id: str
 ) -> PendingTxnResponse:
     last_status = client.status()
@@ -126,3 +124,12 @@ def get_balances(client: AlgodClient, account: str) -> Dict[int, int]:
 
 def get_asset_info(client: AlgodClient, asset_id: int):
     return client.asset_info(asset_id)
+
+
+def get_last_block_timestamp(client: AlgodClient) -> Tuple[int, int]:
+    status = client.status()
+    lastRound = status["last-round"]
+    block = client.block_info(lastRound)
+    timestamp = block["block"]["ts"]
+
+    return block, timestamp
