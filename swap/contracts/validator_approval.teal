@@ -1101,7 +1101,7 @@ bootstrap:
     gtxn 2 ConfigAssetName
     dup
     len
-    int 13
+    int 15
     swap
     substring3
     ==

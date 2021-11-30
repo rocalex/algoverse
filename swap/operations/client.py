@@ -1,4 +1,5 @@
 import json
+import traceback
 from base64 import b64decode
 from algosdk.v2client.algod import AlgodClient
 from algosdk.error import AlgodHTTPError
@@ -30,6 +31,7 @@ class AlgoverseClient:
         try:
             txid = self.algod.send_transactions(transaction_group.signed_transactions)
         except AlgodHTTPError as e:
+            traceback.print_exc()
             raise Exception(json.loads(e.args[0])['message']) from None
         if wait:
             return wait_for_confirmation(self.algod, txid)

@@ -186,7 +186,7 @@ class Pool:
     def update_from_info(self, info):
         if info['liquidity_asset_id'] is not None:
             self.exists = True
-        self.liquidity_asset = Asset(info['liquidity_asset_id'], name=info['liquidity_asset_name'], unit_name='TM1POOL', decimals=6)
+        self.liquidity_asset = Asset(info['liquidity_asset_id'], name=info['liquidity_asset_name'], unit_name='AVPOOL', decimals=6)
         self.asset1_reserves = info['asset1_reserves']
         self.asset2_reserves = info['asset2_reserves']
         self.issued_liquidity = info['issued_liquidity']
@@ -410,6 +410,7 @@ class Pool:
         asset2_amount = amounts_in[self.asset2]
         suggested_params = self.client.algod.suggested_params()
         txn_group = prepare_mint_transactions(
+            client=self.client.algod,
             validator_app_id=self.validator_app_id,
             asset1_id=self.asset1.id,
             asset2_id=self.asset2.id,

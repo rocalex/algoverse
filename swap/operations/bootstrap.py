@@ -43,9 +43,9 @@ def prepare_bootstrap_transactions(
             sp=suggested_params,
             total=0xFFFFFFFFFFFFFFFF,
             decimals=6,
-            unit_name='TM1POOL',
-            asset_name=f'Tinyman Pool {asset1_unit_name}-{asset2_unit_name}',
-            url='https://tinyman.org',
+            unit_name='AVPOOL',
+            asset_name=f'Algoverse Pool {asset1_unit_name}-{asset2_unit_name}',
+            url='https://algoverse.exchange',
             default_frozen=False,
         ),
         AssetOptInTxn(
