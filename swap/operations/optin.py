@@ -1,6 +1,6 @@
 from algosdk.future.transaction import ApplicationOptInTxn, AssetOptInTxn
 
-from ..utils import TransactionGroup
+from utils import TransactionGroup
 
 
 def prepare_app_optin_transactions(validator_app_id, sender, suggested_params):

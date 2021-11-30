@@ -14,8 +14,8 @@ from .mint import prepare_mint_transactions
 from .optin import prepare_asset_optin_transactions
 from .redeem import prepare_redeem_transactions
 from .swap import prepare_swap_transactions
-from ..assets import Asset, AssetAmount
-from ..utils import get_state_int
+from assets import Asset, AssetAmount
+from utils import get_state_int
 
 
 def get_pool_info(client: AlgodClient, validator_app_id, asset1_id, asset2_id):

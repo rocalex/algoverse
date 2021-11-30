@@ -5,8 +5,8 @@ from algosdk.future import transaction
 from algosdk.logic import get_application_address
 from algosdk.v2client.algod import AlgodClient
 
-from .account import Account
-from .utils import fully_compile_contract, get_app_global_state, wait_for_confirmation
+from account import Account
+from utils import fully_compile_contract, get_app_global_state, wait_for_confirmation
 from .contracts import approval_program, clear_state_program
 
 APPROVAL_PROGRAM = b""

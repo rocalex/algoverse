@@ -6,15 +6,15 @@ from algosdk.future import transaction
 
 from .. import contracts
 
-from ..utils import fully_compile_contract, wait_for_confirmation
-from ..account import Account
+from utils import compile_teal, wait_for_confirmation
+from account import Account
 
 
 def get_contracts(client: AlgodClient) -> Tuple[bytes, bytes]:
     approval_teal = importlib.resources.read_text(contracts, 'validator_approval.teal')
     clear_teal = importlib.resources.read_text(contracts, 'validator_clear_state.teal')
-    approval = fully_compile_contract(client, approval_teal)
-    clear_state = fully_compile_contract(client, clear_teal)
+    approval = compile_teal(client, approval_teal)
+    clear_state = compile_teal(client, clear_teal)
     return approval, clear_state
 
 
@@ -23,7 +23,7 @@ def get_pool_logicsig(client: AlgodClient, validator_app_id, asset1_id, asset2_i
     teal = teal.replace("TMPL_ASSET_ID_1", str(asset1_id))
     teal = teal.replace("TMPL_ASSET_ID_2", str(asset2_id))
     teal = teal.replace("TMPL_VALIDATOR_APP_ID", str(validator_app_id))
-    program_bytes = fully_compile_contract(client, teal)
+    program_bytes = compile_teal(client, teal)
 
     return transaction.LogicSig(program=program_bytes)
 
@@ -50,8 +50,8 @@ def create_validator_app(client: AlgodClient, creator: Account):
     client.send_transaction(signed_txn)
 
     response = wait_for_confirmation(client, signed_txn.get_txid())
-    assert response.get('application-index') is not None and response.get('application-index') > 0
-    return response.get('application-index')
+    assert response.application_index is not None and response.application_index > 0
+    return response.application_index
 
 
 def delete_validator_app(client: AlgodClient, creator: Account, app_id: int):
@@ -62,7 +62,7 @@ def delete_validator_app(client: AlgodClient, creator: Account, app_id: int):
     )
 
     signed_txn = txn.sign(creator.get_private_key())
-    
+
     client.send_transaction(signed_txn)
 
     wait_for_confirmation(client, signed_txn.get_txid())
@@ -90,5 +90,5 @@ def create_algoverse_token(client: AlgodClient, creator: Account):
 
     response = wait_for_confirmation(client, signed_txn.get_txid())
 
-    assert response.get('asset-index') is not None and response.get('asset-index') > 0
-    return response.get('asset-index')
+    assert response.asset_index is not None and response.asset_index > 0
+    return response.asset_index

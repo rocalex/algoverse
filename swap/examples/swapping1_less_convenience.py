@@ -7,8 +7,8 @@
 # It is intended to give an understanding of what happens under those convenience functions.
 
 from swap.operations.pools import Pool
-from swap.assets import Asset
-from swap.utils import wait_for_confirmation
+from assets import Asset
+from utils import wait_for_confirmation
 from algosdk.v2client.algod import AlgodClient
 from swap.operations.client import AlgoverseClient
 
@@ -37,7 +37,7 @@ if(not client.is_opted_in(account['address'])):
         if txn.sender == account['address']:
             transaction_group.signed_transactions[i] = txn.sign(account['private_key'])
     txid = client.algod.send_transactions(transaction_group.signed_transactions)
-    wait_for_confirmation(txid)
+    wait_for_confirmation(algod, txid)
 
 
 # Fetch our two assets of interest

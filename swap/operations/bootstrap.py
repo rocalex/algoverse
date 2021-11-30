@@ -2,7 +2,7 @@ from algosdk.future.transaction import ApplicationOptInTxn, PaymentTxn, AssetCre
 from algosdk.v2client.algod import AlgodClient
 
 from . import get_pool_logicsig
-from ..utils import int_to_bytes, TransactionGroup
+from utils import int_to_bytes, TransactionGroup
 
 
 def prepare_bootstrap_transactions(

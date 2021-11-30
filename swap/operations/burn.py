@@ -2,7 +2,7 @@ from algosdk.future.transaction import ApplicationNoOpTxn, PaymentTxn, AssetTran
 from algosdk.v2client.algod import AlgodClient
 
 from . import get_pool_logicsig
-from ..utils import TransactionGroup
+from utils import TransactionGroup
 
 
 def prepare_burn_transactions(client: AlgodClient, validator_app_id, asset1_id, asset2_id, liquidity_asset_id, asset1_amount, asset2_amount, liquidity_asset_amount, sender, suggested_params):

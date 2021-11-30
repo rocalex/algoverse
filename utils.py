@@ -1,9 +1,13 @@
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from typing import Dict, Tuple, Union, List, Any, Optional
 
 from algosdk import encoding
+from algosdk.error import AlgodHTTPError
+from algosdk.future.transaction import LogicSigTransaction, assign_group_id
 from algosdk.v2client.algod import AlgodClient
 from pyteal import compileTeal, Expr, Mode
+
+from account import Account
 
 
 def get_algod_client(url, token) -> AlgodClient:
@@ -32,6 +36,37 @@ class PendingTxnResponse:
         self.logs: List[bytes] = [b64decode(ll) for ll in response.get("logs", [])]
 
 
+class TransactionGroup:
+
+    def __init__(self, transactions: list):
+        transactions = assign_group_id(transactions)
+        self.transactions = transactions
+        self.signed_transactions: list = [None for _ in self.transactions]
+
+    def sign(self, user):
+        user.sign_transaction_group(self)
+
+    def sign_with_logicisg(self, logicsig):
+        address = logicsig.address()
+        for i, txn in enumerate(self.transactions):
+            if txn.sender == address:
+                self.signed_transactions[i] = LogicSigTransaction(txn, logicsig)
+
+    def sign_with_private_key(self, account: Account):
+        for i, txn in enumerate(self.transactions):
+            if txn.sender == account.get_address():
+                self.signed_transactions[i] = txn.sign(account.get_private_key())
+
+    def submit(self, algod, wait=False):
+        try:
+            txid = algod.send_transactions(self.signed_transactions)
+        except AlgodHTTPError as e:
+            raise Exception(str(e))
+        if wait:
+            return wait_for_confirmation(algod, txid)
+        return {'txid': txid}
+
+
 def wait_for_confirmation(
         client: AlgodClient, tx_id: str
 ) -> PendingTxnResponse:
@@ -55,6 +90,27 @@ def fully_compile_contract(client: AlgodClient, contract: Expr) -> bytes:
     teal = compileTeal(contract, mode=Mode.Application, version=5)
     response = client.compile(teal)
     return b64decode(response["result"])
+
+
+def compile_teal(client: AlgodClient, teal) -> bytes:
+    response = client.compile(teal)
+    return b64decode(response["result"])
+
+
+def int_to_bytes(num):
+    return num.to_bytes(8, 'big')
+
+
+def get_state_int(state, key):
+    if type(key) == str:
+        key = b64encode(key.encode())
+    return state.get(key.decode(), {'uint': 0})['uint']
+
+
+def get_state_bytes(state, key):
+    if type(key) == str:
+        key = b64encode(key.encode())
+    return state.get(key.decode(), {'bytes': ''})['bytes']
 
 
 def decode_state(state_array: List[Any]) -> Dict[bytes, Union[int, bytes]]:

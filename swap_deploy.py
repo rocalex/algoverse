@@ -2,7 +2,7 @@ import os
 
 import dotenv
 
-from swap.account import Account
+from account import Account
 from swap.operations import create_validator_app, delete_validator_app, create_algoverse_token
 from swap.utils import get_algod_client
 
