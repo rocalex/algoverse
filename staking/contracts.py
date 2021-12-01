@@ -18,12 +18,17 @@ class StakingContract:
         
     def on_setup(self):
         return Seq(
-            Assert(App.globalGet(self.Vars.creator_key) == Txn.sender()),
+            Assert(
+                And(
+                    App.globalGet(self.Vars.creator_key) == Txn.sender(),
+                    App.globalGet(self.Vars.token_id_key) == Txn.assets[0]
+                )
+            ),
             
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: App.globalGet(self.Vars.token_id_key),
+                TxnField.xfer_asset: Txn.assets[0],
                 TxnField.asset_receiver: Global.current_application_address(),
             }),
             InnerTxnBuilder.Submit(),

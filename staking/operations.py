@@ -1,13 +1,19 @@
 from typing import Tuple
+from algosdk.future import transaction
 from algosdk.v2client.algod import AlgodClient
+
 from .contracts import StakingContract
 
-from utils import fully_compile_contract
+from utils import fully_compile_contract, get_app_address, wait_for_confirmation
+from account import Account
 
 
-class StakingApp:
-    def __init__(self, client: AlgodClient):
-        self.algod = client
+class StakingPool:
+    def __init__(self, client: AlgodClient, creator: Account, token_id: int):
+        self.algod: AlgodClient = client
+        self.creator: Account = creator
+        self.token_id: int = token_id
+        self.app_id: int = 0
     
     def get_contracts(self) -> Tuple[bytes, bytes]:
         """Get the compiled TEAL contracts for the staking.
@@ -25,3 +31,81 @@ class StakingApp:
         clear_state = fully_compile_contract(self.algod, contracts.clear_program())
 
         return approval, clear_state
+    
+    def create_app(self):
+        approval, clear = self.get_contracts()
+        
+        global_schema = transaction.StateSchema(num_uints=56, num_byte_slices=1)
+        local_schema = transaction.StateSchema(num_uints=16, num_byte_slices=0)
+        
+        txn = transaction.ApplicationCreateTxn(
+            sender=self.creator.get_address(),
+            on_complete=transaction.OnComplete.NoOpOC,
+            approval_program=approval,
+            clear_program=clear,
+            global_schema=global_schema,
+            local_schema=local_schema,
+            foreign_assets=[self.token_id],
+            sp=self.algod.suggested_params()
+        )
+        
+        signed_txn = txn.sign(self.creator.get_private_key())
+        
+        self.algod.send_transaction(signed_txn)
+        
+        response = wait_for_confirmation(self.algod, signed_txn.get_txid())
+        assert response.application_index is not None and response.application_index > 0
+        self.app_id = response.application_index
+        print(f"App ID: {self.app_id}")
+        print(f"App address: {get_app_address(self.app_id)}")
+        
+        txn = transaction.PaymentTxn(
+            sender=self.creator.get_address(),
+            sp=self.algod.suggested_params(),
+            receiver=get_app_address(self.app_id),
+            amt=201_000,
+        )
+        
+        signed_txn = txn.sign(self.creator.get_private_key())
+        
+        self.algod.send_transaction(signed_txn)
+        
+        wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
+    def setup_app(self):
+        txn = transaction.ApplicationCallTxn(
+            sender=self.creator.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id,
+            app_args=[b"setup"],
+            foreign_assets=[self.token_id],
+            on_complete=transaction.OnComplete.NoOpOC,
+        )
+        
+        signed_txn = txn.sign(self.creator.get_private_key())
+        
+        self.algod.send_transaction(signed_txn)
+        
+        wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
+    def delete_app(self):
+        txn = transaction.ApplicationDeleteTxn(
+            sender=self.creator.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id
+        )
+        
+        signed_txn = txn.sign(self.creator.get_private_key())
+        
+        self.algod.send_transaction(signed_txn)
+        
+        wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
+    def stake_token(self, holder: Account):
+        pass
+    
+    def withdraw_token(self):
+        pass
+    
+    def claim_rewards(self):
+        pass
