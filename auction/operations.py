@@ -9,9 +9,6 @@ from account import Account
 from utils import fully_compile_contract, get_app_global_state, wait_for_confirmation
 from .contracts import approval_program, clear_state_program
 
-APPROVAL_PROGRAM = b""
-CLEAR_STATE_PROGRAM = b""
-
 
 def get_contracts(client: AlgodClient) -> Tuple[bytes, bytes]:
     """Get the compiled TEAL contracts for the auction.
