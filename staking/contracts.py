@@ -55,26 +55,50 @@ class StakingContract:
         return Seq(
             Assert(
                 And(
+                    Global.group_size() == Int(2),
+                    Gtxn[0].type_enum() == TxnType.Payment,
                     App.globalGet(self.Vars.token_id_key) == Txn.assets[0],
-                    requested_amount < old_token_amount
+                    requested_amount <= old_token_amount
                 )
             ),
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.AssetTransfer,
                 TxnField.xfer_asset: Txn.assets[0],
-                TxnField.asset_sender: Global.current_application_address(),
                 TxnField.asset_receiver: Txn.sender(),
                 TxnField.asset_amount: requested_amount
             }),
             InnerTxnBuilder.Submit(),
             
+            App.localPut(Txn.sender(), self.Vars.token_amount_key, old_token_amount - requested_amount),
             Approve()
         )
         
     def on_claim(self):
+        total_amount = AssetHolding.balance(Global.current_application_address(), Txn.assets[0])
+        token_amount = App.localGet(Txn.sender(), self.Vars.token_amount_key)
+        algo_amount = Balance(Global.current_application_address())
         return Seq(
-            # TODO: 
+            Assert(
+                And(
+                    App.globalGet(self.Vars.token_id_key) == Txn.assets[0],
+                    token_amount > Int(0),
+                    Global.group_size() == Int(2),
+                    Gtxn[0].type_enum() == TxnType.Payment
+                )
+            ),
+            total_amount,
+            Assert(total_amount.hasValue()),
+            
+            InnerTxnBuilder.Begin(),
+            InnerTxnBuilder.SetFields({
+                TxnField.type_enum: TxnType.Payment,
+                TxnField.receiver: Txn.sender(),
+                TxnField.amount: WideRatio([token_amount, algo_amount], [total_amount.value()])
+            }),
+            InnerTxnBuilder.Submit(),
+            
+            # TODO: sender must claim rewards once a month
             Approve()
         )
         

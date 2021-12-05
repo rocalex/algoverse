@@ -101,11 +101,85 @@ class StakingPool:
         
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
-    def stake_token(self, holder: Account):
-        pass
+    def is_opted_in(self, user_address):
+        account_info = self.algod.account_info(user_address)  
+        for a in account_info.get('apps-local-state', []):
+            if a['id'] == self.app_id:
+                return True
+        return False
     
-    def withdraw_token(self):
-        pass
+    def optin_app(self, sender: Account):
+        txn = transaction.ApplicationOptInTxn(
+            sender=sender.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id
+        )
+        signed_txn = txn.sign(sender.get_private_key())
+        self.algod.send_transaction(signed_txn)
+        
+        wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
+    def optout_app(self, sender: Account):
+        txn = transaction.ApplicationClearStateTxn(
+            sender=sender.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id
+        )
+        signed_txn = txn.sign(sender.get_private_key())
+        self.algod.send_transaction(signed_txn)
+        
+        wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
+    def stake_token(self, sender: Account, amount: int):
+        transfer_txn = transaction.AssetTransferTxn(
+            sender=sender.get_address(),
+            sp=self.algod.suggested_params(),
+            receiver=get_app_address(self.app_id),
+            index=self.token_id,
+            amt=amount,
+        )
+        call_txn = transaction.ApplicationCallTxn(
+            sender=sender.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id,
+            on_complete=transaction.OnComplete.NoOpOC,
+            app_args=[
+                b"stake",
+            ]
+        )
+        transaction.assign_group_id([transfer_txn, call_txn])
+        
+        signed_transfer_txn = transfer_txn.sign(sender.get_private_key())
+        signed_call_txn = call_txn.sign(sender.get_private_key())
+        tx_id = self.algod.send_transactions([signed_transfer_txn, signed_call_txn])
+        
+        wait_for_confirmation(self.algod, tx_id)
+    
+    def withdraw_token(self, sender: Account, amount: int):
+        payment_txn = transaction.PaymentTxn(
+            sender=sender.get_address(),
+            sp=self.algod.suggested_params(),
+            receiver=get_app_address(self.app_id),
+            amt=100_000
+        )
+        call_txn = transaction.ApplicationCallTxn(
+            sender=sender.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id,
+            on_complete=transaction.OnComplete.NoOpOC,
+            app_args=[
+                b"withdraw",
+                amount.to_bytes(8, 'big'),
+            ],
+            foreign_assets=[self.token_id]
+        )
+        transaction.assign_group_id([payment_txn, call_txn])
+        
+        signed_payment_txn = payment_txn.sign(sender.get_private_key())
+        signed_call_txn = call_txn.sign(sender.get_private_key())
+        tx_id = self.algod.send_transactions([signed_payment_txn, signed_call_txn])
+        
+        wait_for_confirmation(self.algod, tx_id)
     
     def claim_rewards(self):
         pass
