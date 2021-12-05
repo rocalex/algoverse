@@ -6,6 +6,7 @@ class StakingContract:
         creator_key = Bytes("C")
         token_id_key = Bytes("T")
         token_amount_key = Bytes("TA")
+        claimed_month_key = Bytes("CM")
 
     def on_create(self):
         return Seq(
@@ -78,7 +79,10 @@ class StakingContract:
         total_amount = AssetHolding.balance(Global.current_application_address(), Txn.assets[0])
         token_amount = App.localGet(Txn.sender(), self.Vars.token_amount_key)
         algo_amount = Balance(Global.current_application_address())
+        current_month = Global.latest_timestamp() / Int(2629743)
+        old_claimed_month = App.localGetEx(Txn.sender(), Txn.applications[0], self.Vars.claimed_month_key)
         return Seq(
+            old_claimed_month,
             Assert(
                 And(
                     App.globalGet(self.Vars.token_id_key) == Txn.assets[0],
@@ -89,6 +93,9 @@ class StakingContract:
             ),
             total_amount,
             Assert(total_amount.hasValue()),
+            If(old_claimed_month.hasValue()).Then(Seq(
+                Assert(current_month > old_claimed_month.value())
+            )),
             
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
@@ -98,7 +105,7 @@ class StakingContract:
             }),
             InnerTxnBuilder.Submit(),
             
-            # TODO: sender must claim rewards once a month
+            App.localPut(Txn.sender(), self.Vars.claimed_month_key, current_month),
             Approve()
         )
         
