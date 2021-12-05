@@ -88,7 +88,8 @@ class StakingContract:
                     App.globalGet(self.Vars.token_id_key) == Txn.assets[0],
                     token_amount > Int(0),
                     Global.group_size() == Int(2),
-                    Gtxn[0].type_enum() == TxnType.Payment
+                    Gtxn[0].type_enum() == TxnType.Payment,
+                    Gtxn[0].amount() == Int(201_000),
                 )
             ),
             total_amount,
@@ -101,7 +102,7 @@ class StakingContract:
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.Payment,
                 TxnField.receiver: Txn.sender(),
-                TxnField.amount: WideRatio([token_amount, algo_amount], [total_amount.value()])
+                TxnField.amount: WideRatio([token_amount, algo_amount], [total_amount.value()]) - Int(201_000)
             }),
             InnerTxnBuilder.Submit(),
             
