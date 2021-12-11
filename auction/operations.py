@@ -1,3 +1,5 @@
+import os
+
 from typing import Tuple, List
 
 from algosdk import encoding
@@ -63,8 +65,8 @@ def create_auction_app(
     global_schema = transaction.StateSchema(num_uints=7, num_byte_slices=2)
     local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
     
-    distribution_app_address = Account(private_key="FE6UTVPOXD7HCTEYTG27P7KEDZCQFX7ECJANPTI76CMJSKKDQRYFVB4NSA")
-    team_wallet_address = Account(private_key="CE6UTVPOXD7HCTEYTG27P7KEDZCQFX7ECJANPTI76CMJSKKDQRYFVB4NSB")
+    distribution_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
+    team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
         encoding.decode_address(distribution_app_address.get_address()),

@@ -7,6 +7,7 @@ class StakingContract:
         token_id_key = Bytes("T")
         token_amount_key = Bytes("TA")
         claimed_month_key = Bytes("CM")
+        distribute_app_id_key = Bytes("DA")
 
     def on_create(self):
         return Seq(
@@ -14,6 +15,7 @@ class StakingContract:
             
             App.globalPut(self.Vars.creator_key, Txn.sender()),
             App.globalPut(self.Vars.token_id_key, Txn.assets[0]),
+            App.globalPut(self.Vars.distribute_app_id_key, Txn.applications[1]),
             Approve()
         )
         
@@ -41,9 +43,13 @@ class StakingContract:
         return Seq(
             Assert(
                 And(
-                    Global.group_size() == Int(2),
+                    Global.group_size() == Int(3),
+                    Gtxn[0].type_enum() == TxnType.AssetTransfer,
                     Gtxn[0].xfer_asset() == App.globalGet(self.Vars.token_id_key),
-                    Gtxn[0].asset_receiver() == Global.current_application_address()
+                    Gtxn[0].asset_receiver() == Global.current_application_address(),
+                    Gtxn[1].type_enum() == TxnType.ApplicationCall,
+                    Gtxn[1].application_args[0] == Bytes("transfer"),
+                    Gtxn[1].application_id() == App.globalGet(self.Vars.distribute_app_id_key),
                 )
             ),
             App.localPut(Txn.sender(), self.Vars.token_amount_key, Gtxn[0].asset_amount() + old_token_amount),
@@ -79,7 +85,7 @@ class StakingContract:
         total_amount = AssetHolding.balance(Global.current_application_address(), Txn.assets[0])
         token_amount = App.localGet(Txn.sender(), self.Vars.token_amount_key)
         algo_amount = Balance(Global.current_application_address())
-        current_month = Global.latest_timestamp() / Int(2629743)
+        current_day = Global.latest_timestamp() / Int(86400)
         old_claimed_month = App.localGetEx(Txn.sender(), Txn.applications[0], self.Vars.claimed_month_key)
         return Seq(
             old_claimed_month,
@@ -95,7 +101,7 @@ class StakingContract:
             total_amount,
             Assert(total_amount.hasValue()),
             If(old_claimed_month.hasValue()).Then(Seq(
-                Assert(current_month > old_claimed_month.value())
+                Assert(current_day > old_claimed_month.value())
             )),
             
             InnerTxnBuilder.Begin(),
@@ -106,7 +112,7 @@ class StakingContract:
             }),
             InnerTxnBuilder.Submit(),
             
-            App.localPut(Txn.sender(), self.Vars.claimed_month_key, current_month),
+            App.localPut(Txn.sender(), self.Vars.claimed_month_key, current_day),
             Approve()
         )
         
