@@ -43,29 +43,27 @@ def approval_program():
                         {
                             TxnField.type_enum: TxnType.Payment,
                             TxnField.amount: (Balance(Global.current_application_address()) - Global.min_balance()) * Int(97) / Int(100),
-                            TxnField.close_remainder_to: App.globalGet(seller_key),
+                            TxnField.receiver: App.globalGet(seller_key),
                         }
                     ),
                     InnerTxnBuilder.Submit(),
-                ),
-                Seq(
+                    
                     InnerTxnBuilder.Begin(),
                     InnerTxnBuilder.SetFields(
                         {
                             TxnField.type_enum: TxnType.Payment,
                             TxnField.amount: (Balance(Global.current_application_address()) - Global.min_balance()) * Int(3) / Int(200),
-                            TxnField.close_remainder_to: App.globalGet(team_wallet_address_key),
+                            TxnField.receiver: App.globalGet(team_wallet_address_key),
                         }
                     ),
                     InnerTxnBuilder.Submit(),
-                ),
-                Seq(
+                    
                     InnerTxnBuilder.Begin(),
                     InnerTxnBuilder.SetFields(
                         {
                             TxnField.type_enum: TxnType.Payment,
                             TxnField.amount: (Balance(Global.current_application_address()) - Global.min_balance()) * Int(3) / Int(200),
-                            TxnField.close_remainder_to: App.globalGet(distribution_app_address_key),
+                            TxnField.receiver: App.globalGet(distribution_app_address_key),
                         }
                     ),
                     InnerTxnBuilder.Submit(),
