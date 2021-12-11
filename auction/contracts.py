@@ -2,6 +2,9 @@ from pyteal import *
 
 
 def approval_program():
+    
+    distribution_app_address_key = Bytes("distribution_app_address")
+    team_wallet_address_key = Bytes("team_wallet_address")
     seller_key = Bytes("seller")
     token_id_key = Bytes("token_id")
     start_time_key = Bytes("start")
@@ -49,29 +52,69 @@ def approval_program():
         )
 
     @Subroutine(TealType.none)
-    def close_account_to(account: Expr) -> Expr:
+    def close_payments(succeed: Expr) -> Expr:
         return If(Balance(Global.current_application_address()) != Int(0)).Then(
-            Seq(
-                InnerTxnBuilder.Begin(),
-                InnerTxnBuilder.SetFields(
-                    {
-                        TxnField.type_enum: TxnType.Payment,
-                        TxnField.close_remainder_to: account,
-                    }
+            If(succeed).Then(
+                Seq(
+                    InnerTxnBuilder.Begin(),
+                    InnerTxnBuilder.SetFields(
+                        {
+                            TxnField.type_enum: TxnType.Payment,
+                            TxnField.amount: (Balance(Global.current_application_address()) - Global.min_balance()) * Int(97) / Int(100),
+                            TxnField.close_remainder_to: App.globalGet(seller_key),
+                        }
+                    ),
+                    InnerTxnBuilder.Submit(),
                 ),
-                InnerTxnBuilder.Submit(),
+                Seq(
+                    InnerTxnBuilder.Begin(),
+                    InnerTxnBuilder.SetFields(
+                        {
+                            TxnField.type_enum: TxnType.Payment,
+                            TxnField.amount: (Balance(Global.current_application_address()) - Global.min_balance()) * Int(3) / Int(200),
+                            TxnField.close_remainder_to: App.globalGet(team_wallet_address_key),
+                        }
+                    ),
+                    InnerTxnBuilder.Submit(),
+                ),
+                Seq(
+                    InnerTxnBuilder.Begin(),
+                    InnerTxnBuilder.SetFields(
+                        {
+                            TxnField.type_enum: TxnType.Payment,
+                            TxnField.amount: (Balance(Global.current_application_address()) - Global.min_balance()) * Int(3) / Int(200),
+                            TxnField.close_remainder_to: App.globalGet(distribution_app_address_key),
+                        }
+                    ),
+                    InnerTxnBuilder.Submit(),
+                )
             )
+            .Else(
+                Seq(
+                    InnerTxnBuilder.Begin(),
+                    InnerTxnBuilder.SetFields(
+                        {
+                            TxnField.type_enum: TxnType.Payment,
+                            TxnField.close_remainder_to: App.globalGet(seller_key),
+                        }
+                    ),
+                    InnerTxnBuilder.Submit(),
+                )
+            )   
         )
+            
 
-    on_create_start_time = Btoi(Txn.application_args[2])
-    on_create_end_time = Btoi(Txn.application_args[3])
+    on_create_start_time = Btoi(Txn.application_args[4])
+    on_create_end_time = Btoi(Txn.application_args[5])
     on_create = Seq(
-        App.globalPut(seller_key, Txn.application_args[0]),
-        App.globalPut(token_id_key, Btoi(Txn.application_args[1])),
+        App.globalPut(distribution_app_address_key, Txn.application_args[0]),
+        App.globalPut(team_wallet_address_key, Txn.application_args[1]),
+        App.globalPut(seller_key, Txn.application_args[2]),
+        App.globalPut(token_id_key, Btoi(Txn.application_args[3])),
         App.globalPut(start_time_key, on_create_start_time),
         App.globalPut(end_time_key, on_create_end_time),
-        App.globalPut(reserve_amount_key, Btoi(Txn.application_args[4])),
-        App.globalPut(min_bid_increment_key, Btoi(Txn.application_args[5])),
+        App.globalPut(reserve_amount_key, Btoi(Txn.application_args[6])),
+        App.globalPut(min_bid_increment_key, Btoi(Txn.application_args[7])), # why do we need this?
         App.globalPut(lead_bid_account_key, Global.zero_address()),
         Assert(
             And(
@@ -117,9 +160,8 @@ def approval_program():
                 # the actual bid payment is before the app call
                 Gtxn[on_bid_txn_index].type_enum() == TxnType.Payment,
                 Gtxn[on_bid_txn_index].sender() == Txn.sender(),
-                Gtxn[on_bid_txn_index].receiver()
-                == Global.current_application_address(),
-                Gtxn[on_bid_txn_index].amount() >= Global.min_txn_fee(),
+                Gtxn[on_bid_txn_index].receiver() == Global.current_application_address(),
+                Gtxn[on_bid_txn_index].amount() >= Global.min_txn_fee() + App.globalGet(reserve_amount_key), # how about if the reserve price is high?
             )
         ),
         If(
@@ -161,8 +203,8 @@ def approval_program():
                 ),
                 # if the auction contract account has opted into the nft, close it out
                 close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key)),
-                # if the auction contract still has funds, send them all to the seller
-                close_account_to(App.globalGet(seller_key)),
+                # if the auction contract still has funds, send them all to the seller // how can has funds?
+                close_payments(Int(0)),
                 Approve(),
             )
         ),
@@ -180,7 +222,9 @@ def approval_program():
                         close_nft_to(
                             App.globalGet(token_id_key),
                             App.globalGet(lead_bid_account_key),
-                        )
+                        ),
+                        # send remaining funds to the seller
+                        close_payments(Int(1)),
                     )
                     .Else(
                         Seq(
@@ -193,15 +237,17 @@ def approval_program():
                                 App.globalGet(lead_bid_account_key),
                                 App.globalGet(lead_bid_amount_key),
                             ),
+                            # send remaining funds to the seller
+                            close_payments(Int(0)),
                         )
                     )
                 )
                 .Else(
                     # the auction was not successful because no bids were placed: return the nft to the seller
-                    close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key))
+                    close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key)),
+                    # send remaining funds to the seller
+                    close_payments(Int(0)),
                 ),
-                # send remaining funds to the seller
-                close_account_to(App.globalGet(seller_key)),
                 Approve(),
             )
         ),
