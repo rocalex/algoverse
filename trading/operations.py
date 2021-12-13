@@ -31,7 +31,7 @@ def get_contracts(client: AlgodClient) -> Tuple[bytes, bytes]:
 def create_trading_app(
     client: AlgodClient,
     sender: Account,
-    seller: Account,
+    seller: str,
     token_id: int,
     price: int,
 ) -> int:
@@ -53,16 +53,16 @@ def create_trading_app(
     """
     approval, clear = get_contracts(client)
 
-    global_schema = transaction.StateSchema(num_uints=7, num_byte_slices=2)
+    global_schema = transaction.StateSchema(num_uints=7, num_byte_slices=4)
     local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
     
     distribution_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
     team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
-        distribution_app_address.encode('UTF-8'),
-        team_wallet_address.encode('UTF-8'),
-        seller.get_address().encode("UTF-8"),
+        distribution_app_address.get_address().encode('UTF-8'),
+        team_wallet_address.get_address().encode('UTF-8'),
+        seller.encode("UTF-8"),
         token_id.to_bytes(8, "big"),
         price.to_bytes(8, "big"),
     ]
@@ -233,8 +233,12 @@ def close_trading(client: AlgodClient, app_id: int, closer: Account):
     app_global_state = get_app_global_state(client, app_id)
 
     nft_id = app_global_state[b"token_id"]
+    print(nft_id)
 
+    print(app_global_state[b"seller"])
     accounts: List[str] = [encoding.encode_address(app_global_state[b"seller"])]
+    print(accounts)
+    print(app_global_state[b"bid_account"])
 
     if any(app_global_state[b"bid_account"]):
         # if "bid_account" is not the zero address

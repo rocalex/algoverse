@@ -62,16 +62,16 @@ def create_auction_app(
     """
     approval, clear = get_contracts(client)
 
-    global_schema = transaction.StateSchema(num_uints=7, num_byte_slices=2)
+    global_schema = transaction.StateSchema(num_uints=9, num_byte_slices=4)
     local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
     
     distribution_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
     team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
-        encoding.decode_address(distribution_app_address.get_address()),
-        encoding.decode_address(team_wallet_address.get_address()),
-        encoding.decode_address(seller),
+        distribution_app_address.get_address().encode('UTF-8'),
+        team_wallet_address.get_address().encode('UTF-8'),
+        seller.encode("UTF-8"),
         token_id.to_bytes(8, "big"),
         start_time.to_bytes(8, "big"),
         end_time.to_bytes(8, "big"),
@@ -145,6 +145,7 @@ def setup_auction_app(
         amt=funding_amount,
         sp=params,
     )
+    print(f"fund_app_txn: {fund_app_txn}")
 
     setup_txn = transaction.ApplicationCallTxn(
         sender=funder.get_address(),
@@ -154,6 +155,7 @@ def setup_auction_app(
         foreign_assets=[token_id],
         sp=params,
     )
+    print(f"setup_txn: {setup_txn}")
 
     fund_token_txn = transaction.AssetTransferTxn(
         sender=token_holder.get_address(),
@@ -162,6 +164,7 @@ def setup_auction_app(
         amt=asset_amount,
         sp=params,
     )
+    print(f"fund_token_txn: {fund_token_txn}")
 
     transaction.assign_group_id([fund_app_txn, setup_txn, fund_token_txn])
 

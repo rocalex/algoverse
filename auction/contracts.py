@@ -211,18 +211,18 @@ def approval_program():
                 # the auction has ended, pay out assets
                 If(App.globalGet(lead_bid_account_key) != Global.zero_address())
                 .Then(
-                    If(
-                        App.globalGet(lead_bid_amount_key)
-                        >= App.globalGet(reserve_amount_key)
-                    )
+                    If(App.globalGet(lead_bid_amount_key)
+                        >= App.globalGet(reserve_amount_key))
                     .Then(
-                        # the auction was successful: send lead bid account the nft
-                        close_nft_to(
-                            App.globalGet(token_id_key),
-                            App.globalGet(lead_bid_account_key),
-                        ),
-                        # send remaining funds to the seller
-                        close_payments(Int(1)),
+                        Seq(
+                            # the auction was successful: send lead bid account the nft
+                            close_nft_to(
+                                App.globalGet(token_id_key),
+                                App.globalGet(lead_bid_account_key),
+                            ),
+                            # send remaining funds to the seller
+                            close_payments(Int(1)),   
+                        )
                     )
                     .Else(
                         Seq(
@@ -241,10 +241,12 @@ def approval_program():
                     )
                 )
                 .Else(
-                    # the auction was not successful because no bids were placed: return the nft to the seller
-                    close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key)),
-                    # send remaining funds to the seller
-                    close_payments(Int(0)),
+                    Seq(
+                        # the auction was not successful because no bids were placed: return the nft to the seller
+                        close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key)),
+                        # send remaining funds to the seller
+                        close_payments(Int(0)),   
+                    )
                 ),
                 Approve(),
             )

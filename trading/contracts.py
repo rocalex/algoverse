@@ -128,11 +128,16 @@ def approval_program():
                 Gtxn[on_bid_txn_index].amount() >= App.globalGet(price_key),
             )
         ),
-        (
-            App.globalPut(bid_amount_key, Gtxn[on_bid_txn_index].amount()),
-            App.globalPut(bid_account_key, Gtxn[on_bid_txn_index].sender()),
-            Approve(),
-        )
+        If(
+            Gtxn[on_bid_txn_index].amount() >= App.globalGet(price_key)
+        ).Then(
+            Seq(
+                App.globalPut(bid_amount_key, Gtxn[on_bid_txn_index].amount()),
+                App.globalPut(bid_account_key, Gtxn[on_bid_txn_index].sender()),
+                Approve(),
+            )
+        ),
+        Reject(),
     )
 
     on_call_method = Txn.application_args[0]
@@ -146,19 +151,20 @@ def approval_program():
             # the auction has ended, pay out assets
             If(App.globalGet(bid_account_key) != Global.zero_address())
             .Then(
-                # the auction was successful: send lead bid account the nft
-                close_nft_to(
-                    App.globalGet(token_id_key),
-                    App.globalGet(bid_account_key),
-                ),
-                # send remaining funds to the seller
-                close_payments(Int(1)),
+                Seq(
+                    # the auction was successful: send lead bid account the nft
+                    close_nft_to(App.globalGet(token_id_key), App.globalGet(bid_account_key)),
+                    # send remaining funds to the seller
+                    close_payments(Int(1)),   
+                )
             )
             .Else(
-                # the auction was not successful because no bids were placed: return the nft to the seller
-                close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key)),
-                # send remaining funds to the seller
-                close_payments(Int(0)),
+                Seq(
+                    # the auction was not successful because no bids were placed: return the nft to the seller
+                    close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key)),
+                    # send remaining funds to the seller
+                    close_payments(Int(0)),   
+                )
             ),
             Approve(),
         )
@@ -189,10 +195,10 @@ def clear_state_program():
 
 
 if __name__ == "__main__":
-    with open("auction_approval.teal", "w") as f:
+    with open("trading_approval.teal", "w") as f:
         compiled = compileTeal(approval_program(), mode=Mode.Application, version=5)
         f.write(compiled)
 
-    with open("auction_clear_state.teal", "w") as f:
+    with open("trading_clear_state.teal", "w") as f:
         compiled = compileTeal(clear_state_program(), mode=Mode.Application, version=5)
         f.write(compiled)
