@@ -3,10 +3,12 @@ from pyteal import *
 
 def approval_program():
     
+    store_app_address_key = Bytes("store_app_address")
     distribution_app_address_key = Bytes("distribution_app_address")
     team_wallet_address_key = Bytes("team_wallet_address")
     seller_key = Bytes("seller")
     token_id_key = Bytes("token_id")
+    token_amount_key = Bytes("token_amount")
     start_time_key = Bytes("start")
     end_time_key = Bytes("end")
     reserve_amount_key = Bytes("reserve_amount")
@@ -14,7 +16,7 @@ def approval_program():
     num_bids_key = Bytes("num_bids")
     lead_bid_amount_key = Bytes("bid_amount")
     lead_bid_account_key = Bytes("bid_account")
-
+    
     @Subroutine(TealType.none)
     def close_nft_to(asset_id: Expr, account: Expr) -> Expr:
         asset_holding = AssetHolding.balance(
@@ -102,17 +104,19 @@ def approval_program():
         )
             
 
-    on_create_start_time = Btoi(Txn.application_args[4])
-    on_create_end_time = Btoi(Txn.application_args[5])
+    on_create_start_time = Btoi(Txn.application_args[5])
+    on_create_end_time = Btoi(Txn.application_args[6])
     on_create = Seq(
         App.globalPut(distribution_app_address_key, Txn.application_args[0]),
         App.globalPut(team_wallet_address_key, Txn.application_args[1]),
         App.globalPut(seller_key, Txn.application_args[2]),
         App.globalPut(token_id_key, Btoi(Txn.application_args[3])),
+        App.globalPut(token_amount_key, Btoi(Txn.application_args[4])),
         App.globalPut(start_time_key, on_create_start_time),
         App.globalPut(end_time_key, on_create_end_time),
-        App.globalPut(reserve_amount_key, Btoi(Txn.application_args[6])),
-        App.globalPut(min_bid_increment_key, Btoi(Txn.application_args[7])), # why do we need this?
+        App.globalPut(reserve_amount_key, Btoi(Txn.application_args[7])),
+        App.globalPut(min_bid_increment_key, Btoi(Txn.application_args[8])), # why do we need this?
+        App.globalPut(store_app_address_key, Txn.application_args[9]),
         App.globalPut(lead_bid_account_key, Global.zero_address()),
         Assert(
             And(

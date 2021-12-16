@@ -3,14 +3,16 @@ from pyteal import *
 
 def approval_program():
     
+    store_app_address_key = Bytes("store_app_address")
     distribution_app_address_key = Bytes("distribution_app_address")
     team_wallet_address_key = Bytes("team_wallet_address")
     seller_key = Bytes("seller")
     token_id_key = Bytes("token_id")
+    token_amount_key = Bytes("token_amount")
     price_key = Bytes("price")
     bid_amount_key = Bytes("bid_amount")
     bid_account_key = Bytes("bid_account")
-
+    
     @Subroutine(TealType.none)
     def close_nft_to(asset_id: Expr, account: Expr) -> Expr:
         asset_holding = AssetHolding.balance(
@@ -91,6 +93,7 @@ def approval_program():
         App.globalPut(token_id_key, Btoi(Txn.application_args[3])),
         App.globalPut(price_key, price),
         App.globalPut(bid_account_key, Global.zero_address()),
+        App.globalPut(store_app_address_key, Txn.application_args[5]),
         Assert(price >= Global.min_txn_fee()),
         Approve(),
     )

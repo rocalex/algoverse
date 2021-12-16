@@ -33,6 +33,7 @@ def create_auction_app(
     sender: Account,
     seller: str,
     token_id: int,
+    token_amount: int,
     start_time: int,
     end_time: int,
     reserve: int,
@@ -62,10 +63,11 @@ def create_auction_app(
     """
     approval, clear = get_contracts(client)
 
-    global_schema = transaction.StateSchema(num_uints=9, num_byte_slices=4)
+    global_schema = transaction.StateSchema(num_uints=11, num_byte_slices=5)
     local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
     
     distribution_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
+    store_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
     team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
@@ -73,10 +75,12 @@ def create_auction_app(
         team_wallet_address.get_address().encode('UTF-8'),
         seller.encode("UTF-8"),
         token_id.to_bytes(8, "big"),
+        token_amount.to_bytes(8, "big"),
         start_time.to_bytes(8, "big"),
         end_time.to_bytes(8, "big"),
         reserve.to_bytes(8, "big"),
         min_bid_increment.to_bytes(8, "big"),
+        store_app_address.get_address().encode('UTF-8'),
     ]
 
     txn = transaction.ApplicationCreateTxn(
