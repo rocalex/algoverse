@@ -12,6 +12,7 @@ def approval_program():
     price_key = Bytes("PA")
     bid_amount_key = Bytes("BA")
     bid_account_key = Bytes("B_ADDR")
+    bid_result_key = Bytes("BR")
     
     @Subroutine(TealType.none)
     def close_nft_to(asset_id: Expr, account: Expr) -> Expr:
@@ -92,8 +93,9 @@ def approval_program():
         App.globalPut(seller_key, Txn.application_args[2]),
         App.globalPut(token_id_key, Btoi(Txn.application_args[3])),
         App.globalPut(price_key, price),
-        App.globalPut(bid_account_key, Global.zero_address()),
         App.globalPut(store_app_address_key, Txn.application_args[5]),
+        App.globalPut(bid_account_key, Global.zero_address()),
+        App.globalPut(bid_result_key, Int(0)),
         Assert(price >= Global.min_txn_fee()),
         Approve(),
     )
@@ -136,6 +138,7 @@ def approval_program():
             Gtxn[on_bid_txn_index].amount() >= App.globalGet(price_key)
         ).Then(
             Seq(
+                App.globalPut(bid_result_key, Int(1)),
                 App.globalPut(bid_amount_key, Gtxn[on_bid_txn_index].amount()),
                 App.globalPut(bid_account_key, Gtxn[on_bid_txn_index].sender()),
                 Approve(),

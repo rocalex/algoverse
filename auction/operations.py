@@ -71,9 +71,9 @@ def create_auction_app(
     team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
-        distribution_app_address.get_address().encode('UTF-8'),
-        team_wallet_address.get_address().encode('UTF-8'),
-        seller.encode("UTF-8"),
+        encoding.decode_address(distribution_app_address.get_address()),
+        encoding.decode_address(team_wallet_address.get_address()),
+        encoding.decode_address(seller),
         token_id.to_bytes(8, "big"),
         token_amount.to_bytes(8, "big"),
         start_time.to_bytes(8, "big"),

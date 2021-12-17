@@ -54,7 +54,7 @@ def create_trading_app(
     """
     approval, clear = get_contracts(client)
 
-    global_schema = transaction.StateSchema(num_uints=7, num_byte_slices=5)
+    global_schema = transaction.StateSchema(num_uints=10, num_byte_slices=5)
     local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
     
     distribution_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
