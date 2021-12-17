@@ -3,15 +3,15 @@ from pyteal import *
 
 def approval_program():
     
-    store_app_address_key = Bytes("store_app_address")
-    distribution_app_address_key = Bytes("distribution_app_address")
-    team_wallet_address_key = Bytes("team_wallet_address")
-    seller_key = Bytes("seller")
-    token_id_key = Bytes("token_id")
-    token_amount_key = Bytes("token_amount")
-    price_key = Bytes("price")
-    bid_amount_key = Bytes("bid_amount")
-    bid_account_key = Bytes("bid_account")
+    store_app_address_key = Bytes("SAA")
+    distribution_app_address_key = Bytes("DAA")
+    team_wallet_address_key = Bytes("TWA")
+    seller_key = Bytes("S_ADDR")
+    token_id_key = Bytes("TK_ID")
+    token_amount_key = Bytes("TKA")
+    price_key = Bytes("PA")
+    bid_amount_key = Bytes("BA")
+    bid_account_key = Bytes("B_ADDR")
     
     @Subroutine(TealType.none)
     def close_nft_to(asset_id: Expr, account: Expr) -> Expr:
@@ -106,6 +106,7 @@ def approval_program():
             {
                 TxnField.type_enum: TxnType.AssetTransfer,
                 TxnField.xfer_asset: App.globalGet(token_id_key),
+                #TxnField.asset_amount: Txn.asset_amount(),
                 TxnField.asset_receiver: Global.current_application_address(),
             }
         ),

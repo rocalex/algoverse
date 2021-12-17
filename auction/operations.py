@@ -38,6 +38,7 @@ def create_auction_app(
     end_time: int,
     reserve: int,
     min_bid_increment: int,
+    store_app_address: str
 ) -> int:
     """Create a new auction.
 
@@ -67,7 +68,6 @@ def create_auction_app(
     local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
     
     distribution_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
-    store_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
     team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
@@ -80,7 +80,7 @@ def create_auction_app(
         end_time.to_bytes(8, "big"),
         reserve.to_bytes(8, "big"),
         min_bid_increment.to_bytes(8, "big"),
-        store_app_address.get_address().encode('UTF-8'),
+        store_app_address.encode('UTF-8'),
     ]
 
     txn = transaction.ApplicationCreateTxn(

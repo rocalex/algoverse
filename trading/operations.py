@@ -61,9 +61,9 @@ def create_trading_app(
     team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
-        distribution_app_address.get_address().encode('UTF-8'),
-        team_wallet_address.get_address().encode('UTF-8'),
-        seller.encode("UTF-8"),
+        encoding.decode_address(distribution_app_address.get_address()),
+        encoding.decode_address(team_wallet_address.get_address()),
+        encoding.decode_address(seller),
         token_id.to_bytes(8, "big"),
         price.to_bytes(8, "big"),
         store_app_address.encode("UTF-8")
@@ -176,11 +176,11 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, bid_amount: int
     app_address = get_application_address(app_id)
     app_global_state = get_app_global_state(client, app_id)
 
-    token_id = app_global_state[b"token_id"]
+    token_id = app_global_state[b"TK_ID"]
 
-    if any(app_global_state[b"bid_account"]):
+    if any(app_global_state[b"B_ADDR"]):
         # if "bid_account" is not the zero address
-        prev_bid_leader = encoding.encode_address(app_global_state[b"bid_account"])
+        prev_bid_leader = encoding.encode_address(app_global_state[b"B_ADDR"])
     else:
         prev_bid_leader = None
 
@@ -234,18 +234,23 @@ def close_trading(client: AlgodClient, app_id: int, closer: Account):
     """
     app_global_state = get_app_global_state(client, app_id)
 
-    nft_id = app_global_state[b"token_id"]
+    nft_id = app_global_state[b"TK_ID"]
     print(b"token_id", nft_id)
 
-    print(b"seller", app_global_state[b"seller"])
-    accounts: List[str] = [encoding.encode_address(app_global_state[b"seller"])]
-    print(accounts)
-    print(accounts)
-    print(app_global_state[b"bid_account"])
+    print(b"seller", encoding.encode_address(app_global_state[b"S_ADDR"]))
+    
+    accounts: List[str] = [encoding.encode_address(app_global_state[b"S_ADDR"])]
+    print(b"accounts", accounts)
+    
+    print(b"bidder", encoding.encode_address(app_global_state[b"B_ADDR"]))
 
-    if any(app_global_state[b"bid_account"]):
+    if any(app_global_state[b"B_ADDR"]):
         # if "bid_account" is not the zero address
-        accounts.append(encoding.encode_address(app_global_state[b"bid_account"]))
+        accounts.append(encoding.encode_address(app_global_state[b"B_ADDR"]))
+        
+    #accounts.append(encoding.encode_address(app_global_state[b"SAA"]))
+    accounts.append(encoding.encode_address(app_global_state[b"DAA"]))
+    accounts.append(encoding.encode_address(app_global_state[b"TWA"]))
 
     delete_txn = transaction.ApplicationDeleteTxn(
         sender=closer.get_address(),
@@ -255,7 +260,6 @@ def close_trading(client: AlgodClient, app_id: int, closer: Account):
         sp=client.suggested_params(),
     )
     signed_delete_txn = delete_txn.sign(closer.get_private_key())
-
     client.send_transaction(signed_delete_txn)
 
     wait_for_confirmation(client, signed_delete_txn.get_txid())

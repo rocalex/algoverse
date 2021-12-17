@@ -98,6 +98,13 @@ class StoreContract:
                 Or(
                     Txn.on_completion() == OnComplete.DeleteApplication,
                     Txn.on_completion() == OnComplete.OptIn,
+                ),
+                Approve(),
+            ],
+            [
+                Or(
+                    # Txn.on_completion() == OnComplete.DeleteApplication,
+                    # Txn.on_completion() == OnComplete.OptIn,
                     Txn.on_completion() == OnComplete.CloseOut,
                     Txn.on_completion() == OnComplete.UpdateApplication,
                 ),

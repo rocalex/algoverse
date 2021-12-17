@@ -137,6 +137,7 @@ def approval_program():
             {
                 TxnField.type_enum: TxnType.AssetTransfer,
                 TxnField.xfer_asset: App.globalGet(token_id_key),
+                TxnField.asset_amount: Txn.asset_amount(),
                 TxnField.asset_receiver: Global.current_application_address(),
             }
         ),

@@ -57,8 +57,8 @@ class StoringPool:
         response = wait_for_confirmation(self.algod, signed_txn.get_txid())
         assert response.application_index is not None and response.application_index > 0
         self.app_id = response.application_index
-        print(f"App ID: {self.app_id}")
-        print(f"App address: {get_app_address(self.app_id)}")
+        print(f"Store App ID: {self.app_id}")
+        print(f"Store App address: {get_app_address(self.app_id)}")
         
         txn = transaction.PaymentTxn(
             sender=self.creator.get_address(),
