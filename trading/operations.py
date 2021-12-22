@@ -66,7 +66,7 @@ def create_trading_app(
         encoding.decode_address(seller),
         token_id.to_bytes(8, "big"),
         price.to_bytes(8, "big"),
-        store_app_address.encode("UTF-8")
+        encoding.decode_address(store_app_address)
     ]
 
     txn = transaction.ApplicationCreateTxn(
@@ -214,7 +214,7 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, bid_amount: int
     wait_for_confirmation(client, app_call_txn.get_txid())
 
 
-def close_trading(client: AlgodClient, app_id: int, closer: Account):
+def close_trading(client: AlgodClient, app_id: int, store_app_id: int, closer: Account):
     """Close an trading.
 
     This action can only happen before an trading has begun, in which case it is
@@ -243,7 +243,6 @@ def close_trading(client: AlgodClient, app_id: int, closer: Account):
     print(b"accounts", accounts)
     
     print(b"bidder", encoding.encode_address(app_global_state[b"B_ADDR"]))
-
     if any(app_global_state[b"B_ADDR"]):
         # if "bid_account" is not the zero address
         accounts.append(encoding.encode_address(app_global_state[b"B_ADDR"]))
@@ -251,6 +250,60 @@ def close_trading(client: AlgodClient, app_id: int, closer: Account):
     #accounts.append(encoding.encode_address(app_global_state[b"SAA"]))
     accounts.append(encoding.encode_address(app_global_state[b"DAA"]))
     accounts.append(encoding.encode_address(app_global_state[b"TWA"]))
+    
+    delete_txn = transaction.ApplicationDeleteTxn(
+        sender=closer.get_address(),
+        index=app_id,
+        accounts=accounts,
+        foreign_assets=[nft_id],
+        sp=client.suggested_params(),
+    )
+    signed_delete_txn = delete_txn.sign(closer.get_private_key())
+    client.send_transaction(signed_delete_txn)
+
+    wait_for_confirmation(client, signed_delete_txn.get_txid())
+
+
+def close_trading1(client: AlgodClient, app_id: int, store_app_id: int, closer: Account):
+    """Close an trading.
+
+    This action can only happen before an trading has begun, in which case it is
+    cancelled, or after an trading has ended.
+
+    If called after the trading has ended and the trading was successful, the
+    NFT is transferred to the winning bidder and the trading proceeds are
+    transferred to the seller. If the trading was not successful, the NFT and
+    all funds are transferred to the seller.
+
+    Args:
+        client: An Algod client.
+        app_id: The app ID of the trading.
+        closer: The account initiating the close transaction. This must be
+            either the seller or trading creator if you wish to close the
+            trading before it starts. Otherwise, this can be any account.
+    """
+    app_global_state = get_app_global_state(client, app_id)
+
+    nft_id = app_global_state[b"TK_ID"]
+    print(b"token_id", nft_id)
+
+    #print(b"seller", encoding.encode_address(app_global_state[b"S_ADDR"]))
+    print(b"seller", app_global_state[b"S_ADDR"].decode("UTF-8"))
+    
+    #accounts: List[str] = [encoding.encode_address(app_global_state[b"S_ADDR"])]
+    accounts: List[str] = [app_global_state[b"S_ADDR"].decode("UTF-8")]
+    print(b"accounts", accounts)
+    
+    print(b"bidder", encoding.encode_address(app_global_state[b"B_ADDR"]))
+    if any(app_global_state[b"B_ADDR"]):
+        # if "bid_account" is not the zero address
+        accounts.append(encoding.encode_address(app_global_state[b"B_ADDR"]))
+        
+    #accounts.append(encoding.encode_address(app_global_state[b"SAA"]))
+    #accounts.append(encoding.encode_address(app_global_state[b"DAA"]))
+    accounts.append(app_global_state[b"DAA"].decode("UTF-8"))
+    #accounts.append(encoding.encode_address(app_global_state[b"TWA"]))
+    accounts.append(app_global_state[b"TWA"].decode("UTF-8"))
 
     delete_txn = transaction.ApplicationDeleteTxn(
         sender=closer.get_address(),

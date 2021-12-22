@@ -12,7 +12,7 @@ def main():
 
     client = get_algod_client(os.environ.get('ALGOD_URL'), os.environ.get('ALGOD_TOKEN'))
 
-    creator = Account(os.environ.get('CREATOR_PK'))
+    creator = Account.from_mnemonic(os.environ.get('CREATOR_MN'))
 
     print(f"Creator address: {creator.get_address()}")
 

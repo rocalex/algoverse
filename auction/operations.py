@@ -6,6 +6,7 @@ from algosdk import encoding
 from algosdk.future import transaction
 from algosdk.logic import get_application_address
 from algosdk.v2client.algod import AlgodClient
+from pyteal.ast import app
 
 from account import Account
 from utils import fully_compile_contract, get_app_global_state, wait_for_confirmation
@@ -64,7 +65,7 @@ def create_auction_app(
     """
     approval, clear = get_contracts(client)
 
-    global_schema = transaction.StateSchema(num_uints=11, num_byte_slices=5)
+    global_schema = transaction.StateSchema(num_uints=12, num_byte_slices=5)
     local_schema = transaction.StateSchema(num_uints=0, num_byte_slices=0)
     
     distribution_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
@@ -80,7 +81,7 @@ def create_auction_app(
         end_time.to_bytes(8, "big"),
         reserve.to_bytes(8, "big"),
         min_bid_increment.to_bytes(8, "big"),
-        store_app_address.encode('UTF-8'),
+        encoding.decode_address(store_app_address)
     ]
 
     txn = transaction.ApplicationCreateTxn(
@@ -179,9 +180,12 @@ def setup_auction_app(
     client.send_transactions([signed_fund_app_txn, signed_setup_txn, signed_fund_token_txn])
 
     wait_for_confirmation(client, signed_fund_app_txn.get_txid())
-
-
-def place_bid(client: AlgodClient, app_id: int, bidder: Account, bid_amount: int) -> None:
+    
+    
+def place_bid(client: AlgodClient, 
+              app_id: int, 
+              bidder: Account, 
+              bid_amount: int) -> None:
     """Place a bid on an active auction.
 
     Args:
@@ -193,11 +197,11 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, bid_amount: int
     app_address = get_application_address(app_id)
     app_global_state = get_app_global_state(client, app_id)
 
-    token_id = app_global_state[b"token_id"]
+    token_id = app_global_state[b"TK_ID"]
 
-    if any(app_global_state[b"bid_account"]):
+    if any(app_global_state[b"B_ADDR"]):
         # if "bid_account" is not the zero address
-        prev_bid_leader = encoding.encode_address(app_global_state[b"bid_account"])
+        prev_bid_leader = encoding.encode_address(app_global_state[b"B_ADDR"])
     else:
         prev_bid_leader = None
 
@@ -209,7 +213,7 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, bid_amount: int
         amt=bid_amount,
         sp=suggested_params,
     )
-
+    
     app_call_txn = transaction.ApplicationCallTxn(
         sender=bidder.get_address(),
         index=app_id,
@@ -220,7 +224,7 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, bid_amount: int
         accounts=[prev_bid_leader] if prev_bid_leader is not None else [],
         sp=suggested_params,
     )
-
+    
     transaction.assign_group_id([pay_txn, app_call_txn])
 
     signed_pay_txn = pay_txn.sign(bidder.get_private_key())
@@ -229,9 +233,13 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, bid_amount: int
     client.send_transactions([signed_pay_txn, signed_app_call_txn])
 
     wait_for_confirmation(client, app_call_txn.get_txid())
+    
 
-
-def close_auction(client: AlgodClient, app_id: int, closer: Account):
+def close_auction(client: AlgodClient, 
+                  app_id: int, 
+                  store_app_id: int, 
+                  creator: Account,
+                  closer: Account):
     """Close an auction.
 
     This action can only happen before an auction has begun, in which case it is
@@ -250,20 +258,40 @@ def close_auction(client: AlgodClient, app_id: int, closer: Account):
             auction before it starts. Otherwise, this can be any account.
     """
     app_global_state = get_app_global_state(client, app_id)
+    print("app_global_state", app_global_state)
 
-    nft_id = app_global_state[b"token_id"]
-
-    accounts: List[str] = [encoding.encode_address(app_global_state[b"seller"])]
-
-    if any(app_global_state[b"bid_account"]):
+    token_id = app_global_state[b"TK_ID"]
+    
+    accounts: List[str] = [encoding.encode_address(app_global_state[b"S_ADDR"])]
+    if any(app_global_state[b"B_ADDR"]):
         # if "bid_account" is not the zero address
-        accounts.append(encoding.encode_address(app_global_state[b"bid_account"]))
-
+        accounts.append(encoding.encode_address(app_global_state[b"B_ADDR"]))
+        token_amount = app_global_state[b"TKA"]
+        print(f"token_amount", token_amount)
+        
+        store_buying_txn = transaction.ApplicationCallTxn(
+            sender=creator.get_address(),
+            index=store_app_id,
+            on_complete=transaction.OnComplete.NoOpOC,
+            app_args=[b"buy", token_amount.to_bytes(8, 'big')],
+            foreign_assets=[token_id],
+            accounts=accounts,
+            sp=client.suggested_params(),
+        )
+        print(f"store_buying_txn: {store_buying_txn}")
+        signed_store_buying_txn = store_buying_txn.sign(creator.get_private_key())
+        client.send_transaction(signed_store_buying_txn)
+        wait_for_confirmation(client, signed_store_buying_txn.get_txid())
+    
+    accounts.append(encoding.encode_address(app_global_state[b"TWA"]))
+    accounts.append(encoding.encode_address(app_global_state[b"DAA"])) 
+                           
+    print(accounts)
     delete_txn = transaction.ApplicationDeleteTxn(
         sender=closer.get_address(),
         index=app_id,
         accounts=accounts,
-        foreign_assets=[nft_id],
+        foreign_assets=[token_id],
         sp=client.suggested_params(),
     )
     signed_delete_txn = delete_txn.sign(closer.get_private_key())
@@ -271,3 +299,4 @@ def close_auction(client: AlgodClient, app_id: int, closer: Account):
     client.send_transaction(signed_delete_txn)
 
     wait_for_confirmation(client, signed_delete_txn.get_txid())
+    

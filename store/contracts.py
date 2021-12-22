@@ -23,62 +23,61 @@ class StoreContract:
     # will be used for reset user's sold token amount
     def on_set_sold(self):
         total_sold_amount = App.globalGet(self.Vars.total_sold_amount_key)
-        user_sold_amount = App.localGet(Txn.accounts[0], self.Vars.token_sold_amount_key)
+        user_sold_amount = App.localGet(Txn.accounts[1], self.Vars.token_sold_amount_key)
         return Seq(
             Assert(
                 And(
                     Txn.type_enum() == TxnType.ApplicationCall,
                     Txn.receiver() == Global.current_application_address(),
                     Txn.sender() == App.globalGet(self.Vars.creator_key),
-                    Txn.xfer_asset() == App.globalGet(self.Vars.token_id_key),
-                    Txn.amount() > Int(0),
+                    Txn.assets[0] == App.globalGet(self.Vars.token_id_key),
+                    Btoi(Txn.application_args[1]) > Int(0),
                     Txn.accounts.length() == Int(1)
                 )
             ),
             
-            App.globalPut(self.Vars.total_sold_amount_key, total_sold_amount - user_sold_amount + Txn.amount()),
-            App.localPut(Txn.accounts[0], self.Vars.token_sold_amount_key, Txn.amount()),
+            App.globalPut(self.Vars.total_sold_amount_key, total_sold_amount - user_sold_amount + Btoi(Txn.application_args[1])),
+            App.localPut(Txn.accounts[1], self.Vars.token_sold_amount_key, Btoi(Txn.application_args[1])),
             Approve()
         )
         
     # will be used for reset user's bought token amount
     def on_set_bought(self):
         total_bought_amount = App.globalGet(self.Vars.total_bought_amount_key)
-        user_bought_amount = App.localGet(Txn.accounts[0], self.Vars.token_bought_amount_key)
+        user_bought_amount = App.localGet(Txn.accounts[1], self.Vars.token_bought_amount_key)
         return Seq(
             Assert(
                 And(
                     Txn.type_enum() == TxnType.ApplicationCall,
                     Txn.receiver() == Global.current_application_address(),
                     Txn.sender() == App.globalGet(self.Vars.creator_key),
-                    Txn.xfer_asset() == App.globalGet(self.Vars.token_id_key),
-                    Txn.amount() > Int(0),
+                    Txn.assets[0] == App.globalGet(self.Vars.token_id_key),
+                    Btoi(Txn.application_args[1]) > Int(0),
                     Txn.accounts.length() == Int(1)
                 )
             ),
             
-            App.globalPut(self.Vars.total_bought_amount_key, total_bought_amount - user_bought_amount + Txn.amount()),
-            App.localPut(Txn.receiver(), self.Vars.token_bought_amount_key, Txn.amount()),
+            App.globalPut(self.Vars.total_bought_amount_key, total_bought_amount - user_bought_amount + Btoi(Txn.application_args[1])),
+            App.localPut(Txn.receiver(), self.Vars.token_bought_amount_key, Btoi(Txn.application_args[1])),
             Approve()
         )
         
     def on_buy(self):
-        seller_sold_token_amount = App.localGet(Txn.accounts[0], self.Vars.token_sold_amount_key)
-        buyer_bought_token_amount = App.localGet(Txn.accounts[1], self.Vars.token_bought_amount_key)
+        seller_sold_token_amount = App.localGet(Txn.accounts[1], self.Vars.token_sold_amount_key)
+        buyer_bought_token_amount = App.localGet(Txn.accounts[2], self.Vars.token_bought_amount_key)
         return Seq(
             Assert(
                 And(
                     Txn.type_enum() == TxnType.ApplicationCall,
-                    Txn.receiver() == Global.current_application_address(),
                     Txn.sender() == App.globalGet(self.Vars.creator_key),
-                    Txn.xfer_asset() == App.globalGet(self.Vars.token_id_key),
-                    Txn.amount() > Int(0),
+                    Txn.assets[0] == App.globalGet(self.Vars.token_id_key),
+                    Btoi(Txn.application_args[1]) > Int(0),
                     Txn.accounts.length() == Int(2)
                 )
             ),
             
-            App.localPut(Txn.accounts[0], self.Vars.token_sold_amount_key, seller_sold_token_amount + Txn.amount()),
-            App.localPut(Txn.accounts[1], self.Vars.token_bought_amount_key, buyer_bought_token_amount + Txn.amount()),
+            App.localPut(Txn.accounts[1], self.Vars.token_sold_amount_key, seller_sold_token_amount + Btoi(Txn.application_args[1])),
+            App.localPut(Txn.accounts[2], self.Vars.token_bought_amount_key, buyer_bought_token_amount + Btoi(Txn.application_args[1])),
             Approve()
         )
        

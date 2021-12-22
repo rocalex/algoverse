@@ -109,10 +109,9 @@ class StoringPool:
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
             app_args=[
-                b"set_sold",
+                b"set_sold", amount
             ],
-            accounts=[account.get_address()],
-            amount=amount
+            accounts=[account.get_address()]
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)
@@ -126,10 +125,9 @@ class StoringPool:
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
             app_args=[
-                b"set_bought",
+                b"set_bought", amount
             ],
-            accounts=[account.get_address()],
-            amount=amount
+            accounts=[account.get_address()]
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)
@@ -143,10 +141,9 @@ class StoringPool:
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
             app_args=[
-                b"buy",
+                b"buy", amount
             ],
-            accounts=[seller.get_address(), buyer.get_address()],
-            amount=amount
+            accounts=[seller.get_address(), buyer.get_address()]
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)

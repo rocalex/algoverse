@@ -162,7 +162,7 @@ def approval_program():
                     # the auction was successful: send lead bid account the nft
                     close_nft_to(App.globalGet(token_id_key), App.globalGet(bid_account_key)),
                     # send remaining funds to the seller
-                    close_payments(Int(1)),   
+                    close_payments(Int(1)),
                 )
             )
             .Else(

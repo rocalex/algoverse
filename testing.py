@@ -35,6 +35,6 @@ if __name__ == '__main__':
     dotenv.load_dotenv('.env')
 
     client = get_algod_client(os.environ.get('ALGOD_URL'), os.environ.get('ALGOD_TOKEN'))
-    creator = Account(os.environ.get("CREATOR_PK"))
+    creator = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
     asset_id = create_dummy_asset(client, creator, 1_000_000_000, 3, "Algoverse Token", "AVT")
     print(f"Token ID: {asset_id}")
