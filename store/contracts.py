@@ -28,7 +28,6 @@ class StoreContract:
             Assert(
                 And(
                     Txn.type_enum() == TxnType.ApplicationCall,
-                    Txn.receiver() == Global.current_application_address(),
                     Txn.sender() == App.globalGet(self.Vars.creator_key),
                     Txn.assets[0] == App.globalGet(self.Vars.token_id_key),
                     Btoi(Txn.application_args[1]) > Int(0),
@@ -49,7 +48,6 @@ class StoreContract:
             Assert(
                 And(
                     Txn.type_enum() == TxnType.ApplicationCall,
-                    Txn.receiver() == Global.current_application_address(),
                     Txn.sender() == App.globalGet(self.Vars.creator_key),
                     Txn.assets[0] == App.globalGet(self.Vars.token_id_key),
                     Btoi(Txn.application_args[1]) > Int(0),

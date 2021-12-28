@@ -267,21 +267,22 @@ def close_auction(client: AlgodClient,
         # if "bid_account" is not the zero address
         accounts.append(encoding.encode_address(app_global_state[b"B_ADDR"]))
         token_amount = app_global_state[b"TKA"]
-        print(f"token_amount", token_amount)
+        # print(f"token_amount", token_amount)
+        # print("accounts", accounts)
         
-        store_buying_txn = transaction.ApplicationCallTxn(
-            sender=creator.get_address(),
-            index=store_app_id,
-            on_complete=transaction.OnComplete.NoOpOC,
-            app_args=[b"buy", token_amount.to_bytes(8, 'big')],
-            foreign_assets=[token_id],
-            accounts=accounts,
-            sp=client.suggested_params(),
-        )
-        print(f"store_buying_txn: {store_buying_txn}")
-        signed_store_buying_txn = store_buying_txn.sign(creator.get_private_key())
-        client.send_transaction(signed_store_buying_txn)
-        wait_for_confirmation(client, signed_store_buying_txn.get_txid())
+        # store_buying_txn = transaction.ApplicationCallTxn(
+        #     sender=creator.get_address(),
+        #     index=store_app_id,
+        #     on_complete=transaction.OnComplete.NoOpOC,
+        #     app_args=[b"buy", token_amount.to_bytes(8, 'big')],
+        #     foreign_assets=[token_id],
+        #     accounts=accounts,
+        #     sp=client.suggested_params(),
+        # )
+        # print(f"store_buying_txn: {store_buying_txn}")
+        # signed_store_buying_txn = store_buying_txn.sign(creator.get_private_key())
+        # client.send_transaction(signed_store_buying_txn)
+        # wait_for_confirmation(client, signed_store_buying_txn.get_txid())
     
     accounts.append(encoding.encode_address(app_global_state[b"TWA"]))
     accounts.append(encoding.encode_address(app_global_state[b"DAA"])) 

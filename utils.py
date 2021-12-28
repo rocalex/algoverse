@@ -1,5 +1,6 @@
 from base64 import b64decode, b64encode
 from typing import Dict, Tuple, Union, List, Any, Optional
+from algosdk.future import transaction
 
 from algosdk import encoding
 from algosdk.error import AlgodHTTPError
@@ -189,3 +190,56 @@ def get_last_block_timestamp(client: AlgodClient) -> Tuple[int, int]:
     timestamp = block["block"]["ts"]
 
     return block, timestamp
+
+
+def is_opted_in_app(client: AlgodClient, app_id: int, user_address: str):
+    account_info = client.account_info(user_address)  
+    for a in account_info.get('apps-local-state', []):
+        if a['id'] == app_id:
+            return True
+    return False
+
+
+def optin_app(client: AlgodClient, app_id: int, sender: Account):
+    txn = transaction.ApplicationOptInTxn(
+        sender=sender.get_address(),
+        sp=client.suggested_params(),
+        index=app_id
+    )
+    signed_txn = txn.sign(sender.get_private_key())
+    client.send_transaction(signed_txn)
+    
+    wait_for_confirmation(client, signed_txn.get_txid())
+    
+    
+def optout_app(client: AlgodClient, app_id: int, sender: Account):
+    txn = transaction.ApplicationClearStateTxn(
+        sender=sender.get_address(),
+        sp=client.suggested_params(),
+        index=app_id
+    )
+    signed_txn = txn.sign(sender.get_private_key())
+    client.send_transaction(signed_txn)
+    
+    wait_for_confirmation(client, signed_txn.get_txid())
+    
+    
+def is_opted_in_asset(client: AlgodClient, asset_id: int, user_address: str):
+    account_info = client.account_info(user_address)  
+    for a in account_info.get('assets', []):
+        if a['asset-id'] == asset_id:
+            return True
+    return False
+    
+    
+def optin_asset(client: AlgodClient, asset_id: int, sender: Account):
+    txn = transaction.AssetOptInTxn(
+        sender=sender.get_address(),
+        sp=client.suggested_params(),
+        index=asset_id
+    )
+    signed_txn = txn.sign(sender.get_private_key())
+
+    client.send_transaction(signed_txn)
+
+    wait_for_confirmation(client, signed_txn.get_txid())
