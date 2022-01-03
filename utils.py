@@ -9,6 +9,8 @@ from algosdk.v2client.algod import AlgodClient
 from pyteal import compileTeal, Expr, Mode
 
 from account import Account
+from algosdk import account, mnemonic
+import json
 
 
 def get_algod_client(url, token) -> AlgodClient:
@@ -212,6 +214,18 @@ def optin_app(client: AlgodClient, app_id: int, sender: Account):
     wait_for_confirmation(client, signed_txn.get_txid())
     
     
+def optin_app_rekeyed_address(client: AlgodClient, app_id: int, sender: Account, rekeyed_adr: str):
+    txn = transaction.ApplicationOptInTxn(
+        sender=rekeyed_adr,
+        sp=client.suggested_params(),
+        index=app_id
+    )
+    signed_txn = txn.sign(sender.get_private_key())
+    client.send_transaction(signed_txn)
+    
+    wait_for_confirmation(client, signed_txn.get_txid())
+    
+    
 def optout_app(client: AlgodClient, app_id: int, sender: Account):
     txn = transaction.ApplicationClearStateTxn(
         sender=sender.get_address(),
@@ -243,3 +257,90 @@ def optin_asset(client: AlgodClient, asset_id: int, sender: Account):
     client.send_transaction(signed_txn)
 
     wait_for_confirmation(client, signed_txn.get_txid())
+    
+    
+def generate_account_keypair():
+    private_key, address = account.generate_account()
+    print("new address: {}".format(address))
+    print("new private_key: {}".format(private_key))
+    print("new passphrase: {}".format(mnemonic.from_private_key(private_key)))
+    return private_key, address
+    
+
+def generate_rekeyed_account_keypair(client: AlgodClient, rekey_to: Account):
+    private_key, address = generate_account_keypair()
+    generated_account = Account(private_key)
+    
+    funding_amount = (
+        # min account balance
+        100_000
+        # additional min balance to opt into app
+        + 205_000
+        # 2 * min txn fee
+        + 2 * 1_000
+    )
+
+    fund_account_txn = transaction.PaymentTxn(
+        sender=rekey_to.get_address(),
+        receiver=address,
+        amt=funding_amount,
+        sp=client.suggested_params(),
+    )
+    signed_fund_txn = fund_account_txn.sign(rekey_to.get_private_key())
+    client.send_transaction(signed_fund_txn)
+    wait_for_confirmation(client, signed_fund_txn.get_txid())
+    
+    txn = transaction.PaymentTxn(
+        sender=address,
+        receiver=address,
+        amt=0,
+        rekey_to=rekey_to.get_address(),
+        sp=client.suggested_params(),
+    )
+    
+    signed_txn = txn.sign(private_key)
+    client.send_transaction(signed_txn)
+    wait_for_confirmation(client, signed_txn.get_txid())    
+    
+    return address
+
+
+def get_rekeyed_addresses(sender: str) -> List:
+    result = []
+    obj = read_rekeyed_addresses()
+    for key in obj:
+        if (key == sender):
+            for address in obj[key]:
+                result.append(address)
+        return result
+    return []
+
+
+def write_rekeyed_addresses(obj):
+    with open("rekeyed_addresses.json", 'w') as f:
+        json.dump(obj, f)
+        
+
+def read_rekeyed_addresses():
+    with open("rekeyed_addresses.json", 'r') as f:
+        return json.load(f)
+        
+
+def set_rekeyed_address(sender: str, new_address: str, optedin: int = 0):
+    obj = read_rekeyed_addresses()
+    print("obj", obj)
+    for key in obj:
+        if (key == sender):
+            obj[key][new_address] = optedin
+            write_rekeyed_addresses(obj)
+            return
+    
+    no = {}
+    no[new_address] = optedin
+    obj[sender] = no
+    write_rekeyed_addresses(obj)
+
+
+def get_account_info(client: AlgodClient, sender_address: str):
+    account_info = client.account_info(sender_address)
+    print("account_info", account_info)

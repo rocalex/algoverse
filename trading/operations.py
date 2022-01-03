@@ -3,6 +3,7 @@ import os
 from typing import Tuple, List
 
 from algosdk import encoding
+from algosdk.constants import MIN_TXN_FEE
 from algosdk.future import transaction
 from algosdk.logic import get_application_address
 from algosdk.v2client.algod import AlgodClient
@@ -43,8 +44,8 @@ def create_trading_app(
             traded.
         token_id: The ID of the NFT being traded.
         price: The price of the trading. If the trading ends without
-            a bid that is equal to or greater than this amount, the trading will
-            fail, meaning the bid amount will be refunded to the lead bidder and
+            a trade that is equal to or greater than this amount, the trading will
+            fail, meaning the trade amount will be refunded to the lead seller and
             the NFT will return to the seller.
 
     Returns:
@@ -52,7 +53,7 @@ def create_trading_app(
     """
     approval, clear = get_contracts(client)
 
-    global_schema = transaction.StateSchema(num_uints=3, num_byte_slices=2)
+    global_schema = transaction.StateSchema(num_uints=5, num_byte_slices=4)
     local_schema = transaction.StateSchema(num_uints=3, num_byte_slices=0)
     
     distribution_app_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
@@ -112,8 +113,8 @@ def setup_trading_app(
     funding_amount = (
         # min account balance
         100_000
-        # additional min balance to opt into NFT
-        + 100_000
+        # enough balance to opt into NFTs
+        + 100_000_000
         # 2 * min txn fee
         + 2 * 1_000
     )
@@ -144,29 +145,47 @@ def setup_trading_app(
     wait_for_confirmation(client, signed_fund_app_txn.get_txid())
     
     
-def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int, token_amount: int, price: int) -> None:
-    """Place or replace a bid on an active trading.
+def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int, token_amount: int, price: int, trading_index: str) -> None:
+    """Place or replace a trade on an active trading.
 
     Args:
         client: An Algod client.
         app_id: The app ID of the trading.
-        bidder: The account providing the bid.
-        bid_amount: The asset amount of the bid.
-        bid_price: The price of the bid.
+        seller: The account providing the trade.
+        token_amount: The asset amount of the trade.
+        price: The price of the trade.
+        trading_index: Index for replace trade.
     """
     app_address = get_application_address(app_id)
     app_global_state = get_app_global_state(client, app_id)
     suggested_params = client.suggested_params()
     
-    if is_opted_in_app(client, app_id, seller.get_address()) == False:
-        print(f"bidder {seller.get_address()} opt in app {app_id}")
-        optin_app(client, app_id, seller)
-        
     store_app_id = app_global_state[b"SA_ID"]
     print(f"store_app_id", store_app_id)
     if is_opted_in_app(client, store_app_id, seller.get_address()) == False:
-        print(f"bidder {seller.get_address()} opt in app {store_app_id}")
+        print(f"seller {seller.get_address()} opt in app {store_app_id}")
         optin_app(client, store_app_id, seller)
+        
+    n_address = trading_index
+    if not n_address:
+        unused_rekeyed_address = ""
+        rekeyed_addresses = get_rekeyed_addresses(seller.get_address()) # we can get this from network
+        for rekeyed_address in rekeyed_addresses:
+            if is_opted_in_app(client, app_id, rekeyed_address):
+                state = get_app_local_state(client, app_id, rekeyed_address)
+                print(f"local state of {rekeyed_address} :", state)
+                if state[b"TK_ID"] == 0:
+                    unused_rekeyed_address = rekeyed_address
+            else:
+                unused_rekeyed_address = rekeyed_address
+                optin_app_rekeyed_address(client, app_id, seller, unused_rekeyed_address)
+                break
+        
+        n_address = unused_rekeyed_address
+        if not n_address:
+            n_address = generate_rekeyed_account_keypair(client, seller)
+            optin_app_rekeyed_address(client, app_id, seller, n_address)
+            set_rekeyed_address(seller.get_address(), n_address, 1)
     
     token_txn = transaction.AssetTransferTxn(
         sender=seller.get_address(),
@@ -182,6 +201,7 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
         index=app_id,
         on_complete=transaction.OnComplete.NoOpOC,
         app_args=[b"trade", price.to_bytes(8, "big")],
+        accounts=[n_address],
         foreign_assets=[token_id],
         sp=suggested_params,
     )
@@ -194,46 +214,67 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
     client.send_transactions([signed_token_txn, signed_app_call_txn])
 
     wait_for_confirmation(client, app_call_txn.get_txid())
-    return True
+    
+    return n_address
     
     
-def cancel_trade(client: AlgodClient, app_id: int, seller: Account) -> None:
-    """Place a bid on an active trading.
+def cancel_trade(client: AlgodClient, app_id: int, seller: Account, trading_index: str) -> bool:
+    """Place a trade on an active trading.
 
     Args:
         client: An Algod client.
         app_id: The app ID of the trading.
-        bidder: The account providing the bid.
+        seller: The account providing the trade.
     """
-    app_global_state = get_app_global_state(client, app_id)
-    seller_app_local_state = get_app_local_state(client, app_id, seller.get_address())
+    if (is_opted_in_app(client, app_id, trading_index) == False): 
+        return False
+    
+    seller_app_local_state = get_app_local_state(client, app_id, trading_index)
     token_id = seller_app_local_state[b"TK_ID"]
     suggested_params = client.suggested_params()
+    
+    app_address = get_application_address(app_id)
+    funding_amount = 2_000
+
+    # this is needed for returning asset, cause application will pay
+    cancel_pay_txn = transaction.PaymentTxn(
+        sender=seller.get_address(),
+        receiver=app_address,
+        amt=funding_amount,
+        sp=suggested_params,
+    )
     
     app_call_txn = transaction.ApplicationCallTxn(
         sender=seller.get_address(),
         index=app_id,
         on_complete=transaction.OnComplete.NoOpOC,
         app_args=[b"cancel"],
+        accounts=[trading_index],
         foreign_assets=[token_id],
         sp=suggested_params,
     )
+    
+    transaction.assign_group_id([cancel_pay_txn, app_call_txn])
 
+    signed_cancel_pay_txn = cancel_pay_txn.sign(seller.get_private_key())
     signed_app_call_txn = app_call_txn.sign(seller.get_private_key())
-    client.send_transaction(signed_app_call_txn)
+    client.send_transactions([signed_cancel_pay_txn, signed_app_call_txn])
+    
     wait_for_confirmation(client, app_call_txn.get_txid())    
     
-    store_app_id = app_global_state[b"SA_ID"]
-    if is_opted_in_app(client, store_app_id, seller.get_address()) == True:
-        # do we need this store app opt out? cause the bidder might wants to bid again later ?
-        optout_app(client, app_id, seller)
-    else:
-        return False
+    # #do we need this store app opt out? cause the seller might wants to trade again later ?
+    # app_global_state = get_app_global_state(client, app_id)
+    # store_app_id = app_global_state[b"SA_ID"]
+    # if is_opted_in_app(client, store_app_id, seller.get_address()) == True:
+    #     # do we need this store app opt out? cause the seller might wants to trade again later ?
+    #     optout_app(client, app_id, seller)
+    # else:
+    #     return False
 
     return True
 
 
-def place_accept(client: AlgodClient, creator: Account, app_id: int, buyer: Account, seller: str) -> None:
+def place_accept(client: AlgodClient, creator: Account, app_id: int, buyer: Account, seller: str, trading_index: str) -> None:
     """Accept on an active trading.
 
     Args:
@@ -245,35 +286,34 @@ def place_accept(client: AlgodClient, creator: Account, app_id: int, buyer: Acco
     """
     app_address = get_application_address(app_id)
     app_global_state = get_app_global_state(client, app_id)
-    seller_app_local_state = get_app_local_state(client, app_id, seller)
-    token_id = seller_app_local_state[b"TK_ID"]
+    suggested_params = client.suggested_params()
+
+    if (is_opted_in_app(client, app_id, trading_index) == False): 
+        return False
     
-    if (is_opted_in_app(client, app_id, seller) == False): 
+    seller_app_local_state = get_app_local_state(client, app_id, trading_index)
+    token_id = seller_app_local_state[b"TK_ID"]
+    token_amount = seller_app_local_state[b"TA"]
+    trading_price = seller_app_local_state[b"TP"]
+    print(f"token_amount", token_amount)
+    print(f"price", trading_price)
+    
+    # check if buyer has enough algo
+    if get_balances(client, seller)[0] < trading_price:
         return False
     
     if is_opted_in_asset(client, token_id, buyer.get_address()) == False:
-        print(f"bidder {buyer.get_address()} opt in asset {token_id}")
+        print(f"seller {buyer.get_address()} opt in asset {token_id}")
         optin_asset(client, token_id, buyer)
-    
-    price = seller_app_local_state[b"TP"]
-    print(f"price", price)
-    # check if buyer has enough algo
-    if get_balances(client, seller.get_address())[0] < price:
-        return False
-    
-    if is_opted_in_app(client, app_id, buyer.get_address()) == False:
-        optin_app(client, app_id, buyer)
     
     store_app_id = app_global_state[b"SA_ID"]
     if is_opted_in_app(client, store_app_id, buyer.get_address()) == False:
         optin_app(client, store_app_id, buyer)
     
-    suggested_params = client.suggested_params()
-
     pay_txn = transaction.PaymentTxn(
         sender=buyer.get_address(),
         receiver=app_address,
-        amt=price,
+        amt=trading_price,
         sp=suggested_params,
     )
     
@@ -281,10 +321,11 @@ def place_accept(client: AlgodClient, creator: Account, app_id: int, buyer: Acco
         sender=buyer.get_address(),
         index=app_id,
         on_complete=transaction.OnComplete.NoOpOC,
-        app_args=[b"accept"],
+        app_args=[b"accept", token_amount.to_bytes(8, "big")],
         foreign_assets=[token_id],
-        # must include the bidder here to the app can refund that bidder's payment
+        # must include the seller here to the app can refund that seller's payment
         accounts=[seller, 
+                  trading_index,
                   encoding.encode_address(app_global_state[b"DAA"]), 
                   encoding.encode_address(app_global_state[b"TWA"])],
         sp=suggested_params,
@@ -302,10 +343,11 @@ def place_accept(client: AlgodClient, creator: Account, app_id: int, buyer: Acco
         index=store_app_id,
         on_complete=transaction.OnComplete.NoOpOC,
         app_args=[
-            b"buy", price.to_bytes(8, 'big')
+            b"buy", trading_price.to_bytes(8, 'big')
         ],
+        foreign_assets=[token_id],
         accounts=[seller, buyer.get_address()]
-    )    
+    )
     signed_store_app_call_txn = store_app_call_txn.sign(creator.get_private_key())
     client.send_transaction(signed_store_app_call_txn)
     wait_for_confirmation(client, store_app_call_txn.get_txid())
@@ -320,7 +362,7 @@ def close_trading(client: AlgodClient, app_id: int, closer: Account, assets: Lis
     cancelled, or after an trading has ended.
 
     If called after the trading has ended and the trading was successful, the
-    NFT is transferred to the winning bidder and the trading proceeds are
+    NFT is transferred to the winning seller and the trading proceeds are
     transferred to the seller. If the trading was not successful, the NFT and
     all funds are transferred to the seller.
 

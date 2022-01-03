@@ -1,3 +1,4 @@
+from json import load
 from pyteal import *
 
 def approval_program():
@@ -10,6 +11,53 @@ def approval_program():
     trading_amount_key = Bytes("TA")
     trading_price_key = Bytes("TP")
     
+    
+    @Subroutine(TealType.uint64)
+    def is_opening(trading_index: Expr, asset_id: Expr) -> Expr:
+        return And(
+            App.localGet(trading_index, trading_token_id_key),
+            asset_id == App.localGet(trading_index, trading_token_id_key),
+            App.localGet(trading_index, trading_amount_key),
+            App.localGet(trading_index, trading_price_key),
+        )
+        
+    @Subroutine(TealType.none)
+    def handle_trading(seller: Expr, trading_index: Expr, asset_id: Expr, amount: Expr, price: Expr) -> Expr:
+        return Seq(
+            If(is_opening(trading_index, asset_id)).Then(
+                #return asset
+                send_token_to(seller, asset_id, App.localGet(trading_index, trading_amount_key)),
+            ),
+            
+            App.localPut(trading_index, trading_token_id_key, asset_id),
+            App.localPut(trading_index, trading_amount_key, amount),
+            App.localPut(trading_index, trading_price_key, price),
+        )
+        
+    @Subroutine(TealType.none)
+    def handle_cancel_trading(seller: Expr, trading_index: Expr) -> Expr:
+        return Seq(
+            # return asset
+            send_token_to(seller, App.localGet(trading_index, trading_token_id_key), App.localGet(trading_index, trading_amount_key)),
+            
+            App.localPut(trading_index, trading_token_id_key, Int(0)),
+            App.localPut(trading_index, trading_amount_key, Int(0)),
+            App.localPut(trading_index, trading_price_key, Int(0)),
+        )
+        
+    @Subroutine(TealType.none)
+    def handle_accept(seller: Expr, bidder: Expr, trading_index: Expr) -> Expr:
+        return Seq(
+            # send payment to seller
+            send_payments(seller, App.localGet(trading_index, trading_price_key), Int(1)),
+            
+            # send asset to bidder
+            send_token_to(bidder, App.localGet(trading_index, trading_token_id_key), App.localGet(trading_index, trading_amount_key)),
+            
+            App.localPut(trading_index, trading_token_id_key, Int(0)),
+            App.localPut(trading_index, trading_amount_key, Int(0)),
+            App.localPut(trading_index, trading_price_key, Int(0)),
+        )
     
     @Subroutine(TealType.none)
     def optin_asset(asset_id: Expr) -> Expr:
@@ -34,9 +82,9 @@ def approval_program():
         )
     
     @Subroutine(TealType.none)
-    def send_token_to(account: Expr, asset_amount: Expr) -> Expr:
+    def send_token_to(account: Expr, asset_id: Expr, asset_amount: Expr) -> Expr:
         asset_holding = AssetHolding.balance(
-            Global.current_application_address(), App.globalGet(trading_token_id_key)
+            Global.current_application_address(), asset_id
         )
         return Seq(
             asset_holding,
@@ -51,8 +99,7 @@ def approval_program():
                 InnerTxnBuilder.SetFields(
                     {
                         TxnField.type_enum: TxnType.AssetTransfer,
-                        TxnField.xfer_asset: App.globalGet(trading_token_id_key),
-                        TxnField.asset_sender: Global.current_application_address(),
+                        TxnField.xfer_asset: asset_id,
                         TxnField.asset_receiver: account,
                         TxnField.asset_amount: asset_amount,
                     }
@@ -111,9 +158,6 @@ def approval_program():
                         InnerTxnBuilder.Submit(),
                     )
                 ),
-            
-                App.localDel(account, trading_price_key),
-                App.localDel(account, trading_amount_key),
             )
         )
     
@@ -142,56 +186,44 @@ def approval_program():
     on_trade = Seq(
         Assert(
             And(
-                # the actual trading asset transfer is done before the app call
+                # the actual asset transfer is before the app call
                 Gtxn[on_trade_txn_index].type_enum() == TxnType.AssetTransfer,
-                Gtxn[on_trade_txn_index].asset_sender() == Txn.sender(),
                 Gtxn[on_trade_txn_index].asset_receiver() == Global.current_application_address(),
-                Gtxn[on_trade_txn_index].asset_amount() > Int(0),
-                Gtxn[on_trade_txn_index].xfer_asset() == Txn.assets[0],
-                Btoi(Txn.application_args[1]) > Int(0),
-                Txn.assets.length() == Int(1),
-            )
-        ),
-        If(
-            And(
-                App.localGet(Txn.sender(), trading_token_id_key) > Int(0),
-                App.localGet(Txn.sender(), trading_amount_key) > Int(0),
-                App.localGet(Txn.sender(), trading_price_key) > Int(0),
-            )
-        ) 
-        .Then( #if already has opened trade
-            Seq(
-                # return prev assets to seller
-                send_token_to(Txn.sender(), App.localGet(Txn.sender(), trading_amount_key)),
                 
-                App.localPut(Txn.sender(), trading_token_id_key, Txn.assets[0]),
-                App.localPut(Txn.sender(), trading_amount_key, Gtxn[on_trade_txn_index].asset_amount()),
-                App.localPut(Txn.sender(), trading_price_key, Btoi(Txn.application_args[1])),
-            )
-        )
-        .Else(
-            Seq(
-                App.localPut(Txn.sender(), trading_token_id_key, Txn.assets[0]),
-                App.localPut(Txn.sender(), trading_amount_key, Gtxn[on_trade_txn_index].asset_amount()),
-                App.localPut(Txn.sender(), trading_price_key, Btoi(Txn.application_args[1])),
+                # price
+                Txn.application_args.length() == Int(2),
+                Btoi(Txn.application_args[1]) > Int(0),
+                
+                # token id
+                Txn.assets.length() == Int(1),
+                Txn.assets[0] > Int(0),
+                
+                # rekeyed address
+                Txn.accounts.length() == Int(1),
             )
         ),
+        handle_trading(Txn.sender(), Txn.accounts[1], Txn.assets[0], 
+                       Gtxn[on_trade_txn_index].asset_amount(), Btoi(Txn.application_args[1])),
         Approve(),
     )
     
+    on_cancel_pay_txn_index = Txn.group_index() - Int(1)
     on_cancel = Seq(
         Assert(
             And(
-                Txn.type_enum() == TxnType.ApplicationCall,
-                App.localGet(Txn.sender(), trading_token_id_key) > Int(0),
-                App.localGet(Txn.sender(), trading_amount_key) > Int(0),
-                App.localGet(Txn.sender(), trading_price_key) > Int(0),
+                # the actual asset transfer is before the app call
+                Gtxn[on_cancel_pay_txn_index].type_enum() == TxnType.Payment,
+                Gtxn[on_cancel_pay_txn_index].sender() == Txn.sender(),
+                Gtxn[on_cancel_pay_txn_index].receiver() == Global.current_application_address(),
+                Gtxn[on_cancel_pay_txn_index].amount() == Int(2000),
+                
+                Txn.assets.length() == Int(1),
+                Txn.assets[0] > Int(0),
+                Txn.accounts.length() == Int(1),
+                is_opening(Txn.accounts[1], Txn.assets[0]),
             )
         ),
-        Seq(
-            # return asset to seller
-            send_token_to(Txn.sender(), App.localGet(Txn.sender(), trading_amount_key)),
-        ),
+        handle_cancel_trading(Txn.sender(), Txn.accounts[1]),
         Approve(),
     )
     
@@ -203,21 +235,26 @@ def approval_program():
                 Gtxn[on_accept_txn_index].type_enum() == TxnType.Payment,
                 Gtxn[on_accept_txn_index].sender() == Txn.sender(),
                 Gtxn[on_accept_txn_index].receiver() == Global.current_application_address(),
-                Txn.accounts.length() == Int(3),
-                Gtxn[on_accept_txn_index].amount() == App.localGet(Txn.accounts[1], trading_price_key),
-                App.localGet(Txn.accounts[1], trading_amount_key) > Int(0),
-                App.localGet(Txn.accounts[1], trading_price_key) > Int(0),
+                
+                # seller, trading_index(rekeyed_address), distribution app address and team wallet address
+                Txn.accounts.length() == Int(4),
+                Txn.accounts[3] == App.globalGet(distribution_app_address_key),
+                Txn.accounts[4] == App.globalGet(team_wallet_address_key),
+                
+                # include token_id
+                Txn.assets.length() == Int(1),
+                is_opening(Txn.accounts[2], Txn.assets[0]),
+                
+                #should include buying asset amount
+                Txn.application_args.length() == Int(2),
+                Btoi(Txn.application_args[1]) == App.localGet(Txn.accounts[2], trading_amount_key),
+                
+                # should be equal buying price
+                Gtxn[on_accept_txn_index].amount() == App.localGet(Txn.accounts[2], trading_price_key),
             )
         ),
-        Seq(
-            # send payment to seller
-            send_payments(Txn.accounts[1], App.localGet(Txn.accounts[1], trading_price_key), Int(1)),
-            
-            # send asset to buyer
-            send_token_to(Txn.sender(), App.localGet(Txn.accounts[1], trading_amount_key)),
-            
-            Approve(),
-        )
+        handle_accept(Txn.accounts[1], Txn.sender(), Txn.accounts[2]),
+        Approve(),
     )
 
     on_call_method = Txn.application_args[0]

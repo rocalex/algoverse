@@ -2,14 +2,63 @@ from pyteal import *
 
 def approval_program():
     
+    # for global state
     store_app_id_key = Bytes("SA_ID")
     distribution_app_address_key = Bytes("DAA")
     team_wallet_address_key = Bytes("TWA")
     
+    # for local state
     bid_token_id_key = Bytes("TK_ID")
-    bid_amount_key = Bytes("BA")
-    bid_price_key = Bytes("BP")
+    bid_amount_key = Bytes("TA")
+    bid_price_key = Bytes("TP")
     
+    
+    @Subroutine(TealType.uint64)
+    def is_opening(bid_index: Expr, asset_id: Expr) -> Expr:
+        return And(
+            App.localGet(bid_index, bid_token_id_key),
+            asset_id == App.localGet(bid_index, bid_token_id_key),
+            App.localGet(bid_index, bid_amount_key),
+            App.localGet(bid_index, bid_price_key),
+        )
+    
+    @Subroutine(TealType.none)
+    def handle_bid(bidder: Expr, bid_index: Expr, asset_id: Expr, amount: Expr, price: Expr) -> Expr:
+        return Seq(
+            If(is_opening(bid_index, asset_id)).Then(
+                #return payment
+                send_payments(bidder, App.localGet(bid_index, bid_price_key), Int(0)),
+            ),
+            
+            App.localPut(bid_index, bid_token_id_key, asset_id),
+            App.localPut(bid_index, bid_amount_key, amount),
+            App.localPut(bid_index, bid_price_key, price),
+        )
+    
+    @Subroutine(TealType.none)
+    def handle_cancel_bid(bidder: Expr, bid_index: Expr) -> Expr:
+        return Seq(
+            # return payment
+            send_payments(bidder, App.localGet(bid_index, bid_price_key), Int(0)),
+            
+            App.localPut(bid_index, bid_token_id_key, Int(0)),
+            App.localPut(bid_index, bid_amount_key, Int(0)),
+            App.localPut(bid_index, bid_price_key, Int(0)),
+        )
+    
+    @Subroutine(TealType.none)
+    def handle_accept(seller: Expr, bidder: Expr, bid_index: Expr) -> Expr:
+        return Seq(
+            # send payment to seller
+            send_payments(seller, App.localGet(bid_index, bid_price_key), Int(1)),
+            
+            # send asset to bidder
+            send_token_to(bidder, App.localGet(bid_index, bid_token_id_key), App.localGet(bid_index, bid_amount_key)),
+            
+            App.localPut(bid_index, bid_token_id_key, Int(0)),
+            App.localPut(bid_index, bid_amount_key, Int(0)),
+            App.localPut(bid_index, bid_price_key, Int(0)),
+        )
     
     @Subroutine(TealType.none)
     def optin_asset(asset_id: Expr) -> Expr:
@@ -52,7 +101,7 @@ def approval_program():
                     {
                         TxnField.type_enum: TxnType.AssetTransfer,
                         TxnField.xfer_asset: asset_id,
-                        TxnField.asset_sender: Global.current_application_address(),
+                        TxnField.asset_sender: Global.zero_address(),
                         TxnField.asset_receiver: account,
                         TxnField.asset_amount: asset_amount,
                     }
@@ -111,10 +160,6 @@ def approval_program():
                         InnerTxnBuilder.Submit(),
                     )
                 ),
-            
-                App.localDel(account, bid_token_id_key),
-                App.localDel(account, bid_price_key),
-                App.localDel(account, bid_amount_key),
             )
         )
     
@@ -149,53 +194,30 @@ def approval_program():
                 Gtxn[on_bid_txn_index].receiver() == Global.current_application_address(),
                 Gtxn[on_bid_txn_index].amount() >= Global.min_txn_fee(),
                 Txn.application_args.length() == Int(2),
+                # asset amount
                 Btoi(Txn.application_args[1]) > Int(0),
+                # token id
                 Txn.assets.length() == Int(1),
                 Txn.assets[0] > Int(0),
+                # rekeyed address
+                Txn.accounts.length() == Int(1),
             )
         ),
-        If(
-            And(
-                App.localGet(Txn.sender(), bid_token_id_key) > Int(0),
-                App.localGet(Txn.sender(), bid_amount_key) > Int(0),
-                App.localGet(Txn.sender(), bid_price_key) > Int(0),
-            )
-        ) 
-        .Then( #if already has bid
-            Seq(
-                # return prev payment to bidder
-                send_payments(Txn.sender(), App.localGet(Txn.sender(), bid_price_key), Int(0)),
-                
-                App.localPut(Txn.sender(), bid_token_id_key, Txn.assets[0]),
-                App.localPut(Txn.sender(), bid_price_key, Gtxn[on_bid_txn_index].amount()),
-                App.localPut(Txn.sender(), bid_amount_key, Btoi(Txn.application_args[1])),
-            )
-        )
-        .Else(
-            Seq(
-                App.localPut(Txn.sender(), bid_token_id_key, Txn.assets[0]),
-                App.localPut(Txn.sender(), bid_price_key, Gtxn[on_bid_txn_index].amount()),
-                App.localPut(Txn.sender(), bid_amount_key, Btoi(Txn.application_args[1])),
-            )
-        ),
+        handle_bid(Txn.sender(), Txn.accounts[1], Txn.assets[0], 
+                   Btoi(Txn.application_args[1]), Gtxn[on_bid_txn_index].amount()),
         Approve(),
     )
     
     on_cancel = Seq(
         Assert(
             And(
-                Txn.type_enum() == TxnType.ApplicationCall,
                 Txn.assets.length() == Int(1),
                 Txn.assets[0] > Int(0),
-                Txn.assets[0] == App.localGet(Txn.sender(), bid_token_id_key),
-                App.localGet(Txn.sender(), bid_amount_key) > Int(0),
-                App.localGet(Txn.sender(), bid_price_key) > Int(0),
+                Txn.accounts.length() == Int(1),
+                is_opening(Txn.accounts[1], Txn.assets[0]),
             )
         ),
-        Seq(
-            # return payment to bidder
-            send_payments(Txn.sender(), App.localGet(Txn.sender(), bid_price_key), Int(0)),
-        ),
+        handle_cancel_bid(Txn.sender(), Txn.accounts[1]),
         Approve(),
     )
     
@@ -203,26 +225,27 @@ def approval_program():
     on_accept = Seq(
         Assert(
             And(
-                # the actual accept payment is before the app call
+                # the actual accept asset transfer is before the app call
                 Gtxn[on_accept_txn_index].type_enum() == TxnType.AssetTransfer,
-                Gtxn[on_accept_txn_index].asset_sender() == Txn.sender(),
                 Gtxn[on_accept_txn_index].asset_receiver() == Global.current_application_address(),
-                Gtxn[on_accept_txn_index].xfer_asset() == App.localGet(Txn.accounts[1], bid_token_id_key),
-                Gtxn[on_accept_txn_index].asset_amount() == App.localGet(Txn.accounts[1], bid_amount_key),
-                Txn.accounts.length() == Int(3),
-                App.localGet(Txn.accounts[1], bid_amount_key) > Int(0),
-                App.localGet(Txn.accounts[1], bid_price_key) > Int(0),
+                
+                # bidder, bid_index(rekeyed_address), distribution app address and team wallet address
+                Txn.accounts.length() == Int(4),
+                Txn.accounts[3] == App.globalGet(distribution_app_address_key),
+                Txn.accounts[4] == App.globalGet(team_wallet_address_key),
+                
+                is_opening(Txn.accounts[2], Gtxn[on_accept_txn_index].xfer_asset()),
+                
+                # should include selling price
+                Txn.application_args.length() == Int(2),
+                Btoi(Txn.application_args[1]) == App.localGet(Txn.accounts[2], bid_price_key),
+                
+                # should be equal selling asset amounts
+                Gtxn[on_accept_txn_index].asset_amount() == App.localGet(Txn.accounts[2], bid_amount_key),
             )
-        ),
-        Seq(
-            # send payment to seller
-            send_payments(Txn.sender(), App.localGet(Txn.accounts[1], bid_price_key), Int(1)),
-            
-            # send asset to buyer
-            send_token_to(Txn.accounts[1], Gtxn[on_accept_txn_index].xfer_asset(), App.localGet(Txn.accounts[1], bid_amount_key)),
-            
-            Approve(),
-        )
+        ),        
+        handle_accept(Txn.sender(), Txn.accounts[1], Txn.accounts[2]),
+        Approve(),
     )
 
     on_call_method = Txn.application_args[0]
