@@ -113,8 +113,8 @@ def setup_bidding_app(
     funding_amount = (
         # min account balance
         100_000
-        # enough balance to opt into NFT
-        + 100_000_000
+        # balance to opt into NFT
+        + 100_000
         # 2 * min txn fee
         + 2 * 1_000
     )
@@ -164,6 +164,10 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
     if is_opted_in_asset(client, token_id, bidder.get_address()) == False:
         print(f"bidder {bidder.get_address()} opt in asset {token_id}")
         optin_asset(client, token_id, bidder)
+        
+    # app optin asset for receiving the asset
+    if is_opted_in_asset(client, token_id, app_address) == False:
+        setup_bidding_app(client=client, app_id=app_id, funder=bidder, token_id=token_id)
     
     # optin store app for saving information    
     app_global_state = get_app_global_state(client, app_id)

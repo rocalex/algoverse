@@ -113,8 +113,8 @@ def setup_trading_app(
     funding_amount = (
         # min account balance
         100_000
-        # enough balance to opt into NFTs
-        + 100_000_000
+        # balance to opt into NFTs
+        + 100_000
         # 2 * min txn fee
         + 2 * 1_000
     )
@@ -160,13 +160,19 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
     app_global_state = get_app_global_state(client, app_id)
     suggested_params = client.suggested_params()
     
+    # optin store app for saving information    
     store_app_id = app_global_state[b"SA_ID"]
     print(f"store_app_id", store_app_id)
     if is_opted_in_app(client, store_app_id, seller.get_address()) == False:
         print(f"seller {seller.get_address()} opt in app {store_app_id}")
         optin_app(client, store_app_id, seller)
         
+    # app optin asset for receiving the asset
+    if is_opted_in_asset(client, token_id, app_address) == False:
+        setup_trading_app(client=client, app_id=app_id, funder=seller, token_id=token_id)
+    
     n_address = trading_index
+    # if bid_index is empty, find a usable(if the bid app local state's token id is 0) rekeyed address used in the past, 
     if not n_address:
         unused_rekeyed_address = ""
         rekeyed_addresses = get_rekeyed_addresses(seller.get_address()) # we can get this from network
@@ -177,10 +183,12 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
                 if state[b"TK_ID"] == 0:
                     unused_rekeyed_address = rekeyed_address
             else:
+                # might have rekeyed address already but not optin app, we can use it
                 unused_rekeyed_address = rekeyed_address
                 optin_app_rekeyed_address(client, app_id, seller, unused_rekeyed_address)
                 break
         
+        # if not found, create one, and optin app for local state
         n_address = unused_rekeyed_address
         if not n_address:
             n_address = generate_rekeyed_account_keypair(client, seller)
