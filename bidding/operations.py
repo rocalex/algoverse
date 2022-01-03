@@ -160,18 +160,21 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
     app_address = get_application_address(app_id)
     suggested_params = client.suggested_params()
     
+    # optin asset for receiving the asset
     if is_opted_in_asset(client, token_id, bidder.get_address()) == False:
         print(f"bidder {bidder.get_address()} opt in asset {token_id}")
         optin_asset(client, token_id, bidder)
-        
+    
+    # optin store app for saving information    
     app_global_state = get_app_global_state(client, app_id)
     store_app_id = app_global_state[b"SA_ID"]
     print(f"store_app_id", store_app_id)
     if is_opted_in_app(client, store_app_id, bidder.get_address()) == False:
         print(f"bidder {bidder.get_address()} opt in app {store_app_id}")
         optin_app(client, store_app_id, bidder)
-        
+    
     n_address = bid_index
+    # if bid_index is empty, find a usable(if the bid app local state's token id is 0) rekeyed address used in the past, 
     if not n_address:
         unused_rekeyed_address = ""
         rekeyed_addresses = get_rekeyed_addresses(bidder.get_address()) # we will get this from network
@@ -182,10 +185,12 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
                 if state[b"TK_ID"] == 0:
                     unused_rekeyed_address = rekeyed_address
             else:
+                # might have rekeyed address already but not optin app, we can use it
                 unused_rekeyed_address = rekeyed_address
                 optin_app_rekeyed_address(client, app_id, bidder, unused_rekeyed_address)
                 break
         
+        # if not found, create one, and optin app for local state
         n_address = unused_rekeyed_address
         if not n_address:
             n_address = generate_rekeyed_account_keypair(client, bidder)
