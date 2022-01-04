@@ -35,7 +35,7 @@ class StoringPool:
     def create_app(self):
         approval, clear = self.get_contracts()
         
-        global_schema = transaction.StateSchema(num_uints=2, num_byte_slices=0)
+        global_schema = transaction.StateSchema(num_uints=5, num_byte_slices=0)
         local_schema = transaction.StateSchema(num_uints=2, num_byte_slices=0)
         
         txn = transaction.ApplicationCreateTxn(
@@ -66,6 +66,23 @@ class StoringPool:
         signed_txn = txn.sign(self.creator.get_private_key())
         self.algod.send_transaction(signed_txn)
         wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
+    def set_up(self, trade_app_id: int, bid_app_id: int, auction_app_id: int):
+        call_txn = transaction.ApplicationCallTxn(
+            sender=self.creator.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id,
+            on_complete=transaction.OnComplete.NoOpOC,
+            app_args=[
+                b"setup", 
+                trade_app_id.to_bytes(8, "big"), 
+                bid_app_id.to_bytes(8, "big"), 
+                auction_app_id.to_bytes(8, "big")
+            ],
+        )
+        signed_txn = call_txn.sign(self.creator.get_private_key())
+        tx_id = self.algod.send_transaction(signed_txn)
+        wait_for_confirmation(self.algod, tx_id)
         
     def is_opted_in(self, user_address):
         account_info = self.algod.account_info(user_address)  
@@ -126,15 +143,30 @@ class StoringPool:
         
     def buy(self, seller: Account, buyer: Account, amount: int):
         call_txn = transaction.ApplicationCallTxn(
-            sender=self.creator.get_address(),
+            sender=self.buyer.get_address(),
             sp=self.algod.suggested_params(),
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
             app_args=[
                 b"buy", amount
             ],
-            accounts=[seller.get_address(), buyer.get_address()]
+            accounts=[seller.get_address()]
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
+        tx_id = self.algod.send_transaction(signed_txn)
+        wait_for_confirmation(self.algod, tx_id)
+        
+    def sell(self, seller: Account, buyer: Account, amount: int):
+        call_txn = transaction.ApplicationCallTxn(
+            sender=seller.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id,
+            on_complete=transaction.OnComplete.NoOpOC,
+            app_args=[
+                b"sell", amount
+            ],
+            accounts=[buyer.get_address()]
+        )
+        signed_txn = call_txn.sign(self.seller.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)
         wait_for_confirmation(self.algod, tx_id)

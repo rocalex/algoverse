@@ -185,6 +185,7 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
     if is_opted_in_asset(client, token_id, app_address) == False:
         setup_trading_app(client=client, app_id=app_id, funder=seller, token_id=token_id)
     
+    tokens = [token_id]
     n_address = trading_index
     # if bid_index is empty, find a usable(if the bid app local state's token id is 0) rekeyed address used in the past, 
     if not n_address:
@@ -209,6 +210,10 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
             n_address = generate_rekeyed_account_keypair(client, seller)
             optin_app_rekeyed_address(client, app_id, seller, n_address)
             set_rekeyed_address(seller.get_address(), n_address, 1)
+    else:
+        state = get_app_local_state(client, app_id, trading_index)
+        if b"TK_ID" in state and state[b"TK_ID"] > 0:
+            tokens.append(state[b"TK_ID"])
     
     token_txn = transaction.AssetTransferTxn(
         sender=seller.get_address(),
@@ -225,7 +230,7 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
         on_complete=transaction.OnComplete.NoOpOC,
         app_args=[b"trade", price.to_bytes(8, "big")],
         accounts=[n_address],
-        foreign_assets=[token_id],
+        foreign_assets=tokens,
         sp=suggested_params,
     )
 
@@ -297,7 +302,7 @@ def cancel_trade(client: AlgodClient, app_id: int, seller: Account, trading_inde
     return True
 
 
-def place_accept(client: AlgodClient, creator: Account, app_id: int, buyer: Account, seller: str, trading_index: str) -> None:
+def accept_trade(client: AlgodClient, app_id: int, buyer: Account, seller: str, trading_index: str) -> None:
     """Accept on an active trading.
 
     Args:
@@ -351,20 +356,18 @@ def place_accept(client: AlgodClient, creator: Account, app_id: int, buyer: Acco
     )
     
     store_app_call_txn = transaction.ApplicationCallTxn(
-        sender=creator.get_address(),
+        sender=buyer.get_address(),
         sp=suggested_params,
         index=store_app_id,
         on_complete=transaction.OnComplete.NoOpOC,
-        app_args=[
-            b"buy", trading_price.to_bytes(8, 'big')
-        ],
+        app_args=[b"buy"],
         accounts=[seller, buyer.get_address()]
     )
     
     transaction.assign_group_id([pay_txn, app_call_txn, store_app_call_txn])
     signed_pay_txn = pay_txn.sign(buyer.get_private_key())
     signed_app_call_txn = app_call_txn.sign(buyer.get_private_key())
-    signed_store_app_call_txn = store_app_call_txn.sign(creator.get_private_key())
+    signed_store_app_call_txn = store_app_call_txn.sign(buyer.get_private_key())
     
     client.send_transactions([signed_pay_txn, signed_app_call_txn, signed_store_app_call_txn])
     wait_for_confirmation(client, app_call_txn.get_txid())

@@ -186,6 +186,7 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
         print(f"bidder {bidder.get_address()} opt in app {store_app_id}")
         optin_app(client, store_app_id, bidder)
     
+    tokens = [token_id]
     n_address = bid_index
     # if bid_index is empty, find a usable(if the bid app local state's token id is 0) rekeyed address used in the past, 
     if not n_address:
@@ -210,7 +211,11 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
             n_address = generate_rekeyed_account_keypair(client, bidder)
             optin_app_rekeyed_address(client, app_id, bidder, n_address)
             set_rekeyed_address(bidder.get_address(), n_address, 1)
-    
+    else:
+        state = get_app_local_state(client, app_id, bid_index)
+        if b"TK_ID" in state and state[b"TK_ID"] > 0:
+            tokens.append(state[b"TK_ID"])
+        
     pay_txn = transaction.PaymentTxn(
         sender=bidder.get_address(),
         receiver=app_address,
@@ -223,7 +228,7 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
         index=app_id,
         on_complete=transaction.OnComplete.NoOpOC,
         app_args=[b"bid", bid_amount.to_bytes(8, "big")],
-        foreign_assets=[token_id],
+        foreign_assets=tokens,
         accounts=[n_address],
         sp=suggested_params,
     )
@@ -276,7 +281,7 @@ def cancel_bid(client: AlgodClient, app_id: int, bidder: Account, bid_index: str
     return True
 
 
-def place_accept(client: AlgodClient, creator: Account, app_id: int, seller: Account, bidder: str, bid_index: str) -> None:
+def accept_bid(client: AlgodClient, app_id: int, seller: Account, bidder: str, bid_index: str) -> None:
     """Accept on an active bidding.
 
     Args:
@@ -333,20 +338,18 @@ def place_accept(client: AlgodClient, creator: Account, app_id: int, seller: Acc
     )
     
     store_app_call_txn = transaction.ApplicationCallTxn(
-        sender=creator.get_address(),
+        sender=seller.get_address(),
         sp=suggested_params,
         index=store_app_id,
         on_complete=transaction.OnComplete.NoOpOC,
-        app_args=[
-            b"buy", bid_price.to_bytes(8, "big")
-        ],
-        accounts=[seller.get_address(), bidder]
+        app_args=[b"sell"],
+        accounts=[bidder]
     )
     
     transaction.assign_group_id([asset_txn, app_call_txn, store_app_call_txn])
     signed_asset_txn = asset_txn.sign(seller.get_private_key())
     signed_app_call_txn = app_call_txn.sign(seller.get_private_key())
-    signed_store_app_call_txn = store_app_call_txn.sign(creator.get_private_key())
+    signed_store_app_call_txn = store_app_call_txn.sign(seller.get_private_key())
     
     client.send_transactions([signed_asset_txn, signed_app_call_txn, signed_store_app_call_txn])
     wait_for_confirmation(client, app_call_txn.get_txid())

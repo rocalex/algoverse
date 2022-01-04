@@ -216,7 +216,7 @@ def approval_program():
                 # asset amount
                 Btoi(Txn.application_args[1]) > Int(0),
                 # token id
-                Txn.assets.length() == Int(1),
+                Txn.assets.length() > Int(0),
                 Txn.assets[0] > Int(0),
                 # rekeyed address
                 Txn.accounts.length() == Int(1),
@@ -267,14 +267,12 @@ def approval_program():
                 
                 # store app call
                 Gtxn[on_store_txn_index].type_enum() == TxnType.ApplicationCall,
-                Gtxn[on_store_txn_index].sender() == Global.creator_address(),
+                Gtxn[on_store_txn_index].sender() == Txn.sender(),
                 Gtxn[on_store_txn_index].application_id() == App.globalGet(store_app_id_key),
-                Gtxn[on_store_txn_index].application_args.length() == Int(2),
-                Gtxn[on_store_txn_index].application_args[0] == Bytes("buy"),
-                Gtxn[on_store_txn_index].application_args[1] == Txn.application_args[1],
-                Gtxn[on_store_txn_index].accounts.length() == Int(2),
-                Gtxn[on_store_txn_index].accounts[1] == Txn.sender(),
-                Gtxn[on_store_txn_index].accounts[2] == Txn.accounts[1],
+                Gtxn[on_store_txn_index].application_args.length() == Int(1),
+                Gtxn[on_store_txn_index].application_args[0] == Bytes("sell"),
+                Gtxn[on_store_txn_index].accounts.length() == Int(1),
+                Gtxn[on_store_txn_index].accounts[1] == Txn.accounts[1], # bidder
             )
         ),
         handle_accept(Txn.sender(), Txn.accounts[1], Txn.accounts[2]),
