@@ -75,6 +75,8 @@ class StoreContract:
             
             App.localPut(Txn.accounts[1], self.Vars.sold_amount_key, seller_sold_amount + Btoi(Txn.application_args[1])),
             App.localPut(Txn.accounts[2], self.Vars.bought_amount_key, buyer_bought_amount + Btoi(Txn.application_args[1])),
+            App.globalPut(self.Vars.total_sold_amount_key, seller_sold_amount + App.globalGet(self.Vars.total_sold_amount_key)),
+            App.globalPut(self.Vars.total_bought_amount_key, buyer_bought_amount + App.globalGet(self.Vars.total_bought_amount_key)),
             Approve()
         )
        
