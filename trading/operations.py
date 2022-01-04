@@ -361,7 +361,7 @@ def accept_trade(client: AlgodClient, app_id: int, buyer: Account, seller: str, 
         index=store_app_id,
         on_complete=transaction.OnComplete.NoOpOC,
         app_args=[b"buy"],
-        accounts=[seller, buyer.get_address()]
+        accounts=[seller]
     )
     
     transaction.assign_group_id([pay_txn, app_call_txn, store_app_call_txn])
