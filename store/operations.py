@@ -73,12 +73,8 @@ class StoringPool:
             sp=self.algod.suggested_params(),
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
-            app_args=[
-                b"setup", 
-                trade_app_id.to_bytes(8, "big"), 
-                bid_app_id.to_bytes(8, "big"), 
-                auction_app_id.to_bytes(8, "big")
-            ],
+            foreign_apps=[trade_app_id, bid_app_id, auction_app_id],
+            app_args=[b"setup"],
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)
