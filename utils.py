@@ -269,15 +269,14 @@ def generate_account_keypair():
 
 def generate_rekeyed_account_keypair(client: AlgodClient, rekey_to: Account):
     private_key, address = generate_account_keypair()
-    generated_account = Account(private_key)
     
     funding_amount = (
         # min account balance
         100_000
-        # additional min balance to opt into app
-        + 205_000
-        # 2 * min txn fee
-        + 2 * 1_000
+        # additional min balance to opt into app: 100000 + 28500 * 3 + 50000
+        + 235_500
+        # min txn fee
+        + 2_000
     )
 
     fund_account_txn = transaction.PaymentTxn(
@@ -300,9 +299,29 @@ def generate_rekeyed_account_keypair(client: AlgodClient, rekey_to: Account):
     
     signed_txn = txn.sign(private_key)
     client.send_transaction(signed_txn)
-    wait_for_confirmation(client, signed_txn.get_txid())    
+    wait_for_confirmation(client, signed_txn.get_txid())
     
     return address
+
+
+def transfer_optin_price(client: AlgodClient, sender: Account, receiver: str):
+    fund_amount = (
+        100_000
+        # additional min balance to opt into app
+        + 135_500
+        # min txn fee
+        + 1_000
+    )
+
+    fund_account_txn = transaction.PaymentTxn(
+        sender=sender.get_address(),
+        receiver=receiver,
+        amt=fund_amount,
+        sp=client.suggested_params(),
+    )
+    signed_fund_txn = fund_account_txn.sign(sender.get_private_key())
+    client.send_transaction(signed_fund_txn)
+    wait_for_confirmation(client, signed_fund_txn.get_txid())
 
 
 def get_rekeyed_addresses(sender: str) -> List:

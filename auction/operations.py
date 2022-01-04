@@ -72,6 +72,7 @@ def create_auction_app(
     team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
+        encoding.decode_address(store_app_address),
         encoding.decode_address(distribution_app_address.get_address()),
         encoding.decode_address(team_wallet_address.get_address()),
         encoding.decode_address(seller),
@@ -81,7 +82,6 @@ def create_auction_app(
         end_time.to_bytes(8, "big"),
         reserve.to_bytes(8, "big"),
         min_bid_increment.to_bytes(8, "big"),
-        encoding.decode_address(store_app_address)
     ]
 
     txn = transaction.ApplicationCreateTxn(

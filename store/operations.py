@@ -10,10 +10,9 @@ from account import Account
 
 
 class StoringPool:
-    def __init__(self, client: AlgodClient, creator: Account, token_id: int):
+    def __init__(self, client: AlgodClient, creator: Account):
         self.algod: AlgodClient = client
         self.creator: Account = creator
-        self.token_id: int = token_id
         self.app_id: int = 0
     
     def get_contracts(self) -> Tuple[bytes, bytes]:
@@ -36,8 +35,8 @@ class StoringPool:
     def create_app(self):
         approval, clear = self.get_contracts()
         
-        global_schema = transaction.StateSchema(num_uints=6, num_byte_slices=2)
-        local_schema = transaction.StateSchema(num_uints=16, num_byte_slices=0)
+        global_schema = transaction.StateSchema(num_uints=2, num_byte_slices=0)
+        local_schema = transaction.StateSchema(num_uints=2, num_byte_slices=0)
         
         txn = transaction.ApplicationCreateTxn(
             sender=self.creator.get_address(),
@@ -46,14 +45,11 @@ class StoringPool:
             clear_program=clear,
             global_schema=global_schema,
             local_schema=local_schema,
-            foreign_assets=[self.token_id],
             sp=self.algod.suggested_params()
         )
         
         signed_txn = txn.sign(self.creator.get_private_key())
-        
-        self.algod.send_transaction(signed_txn)
-        
+        self.algod.send_transaction(signed_txn)        
         response = wait_for_confirmation(self.algod, signed_txn.get_txid())
         assert response.application_index is not None and response.application_index > 0
         self.app_id = response.application_index
@@ -68,9 +64,7 @@ class StoringPool:
         )
         
         signed_txn = txn.sign(self.creator.get_private_key())
-        
         self.algod.send_transaction(signed_txn)
-        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
     def is_opted_in(self, user_address):
@@ -88,7 +82,6 @@ class StoringPool:
         )
         signed_txn = txn.sign(sender.get_private_key())
         self.algod.send_transaction(signed_txn)
-        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
     def optout_app(self, sender: Account):
@@ -99,10 +92,9 @@ class StoringPool:
         )
         signed_txn = txn.sign(sender.get_private_key())
         self.algod.send_transaction(signed_txn)
-        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
-    def set_sold_token_amount(self, account: Account, amount: int):
+    def set_sold_amount(self, account: Account, amount: int):
         call_txn = transaction.ApplicationCallTxn(
             sender=self.creator.get_address(),
             sp=self.algod.suggested_params(),
@@ -115,10 +107,9 @@ class StoringPool:
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)
-        
         wait_for_confirmation(self.algod, tx_id)
     
-    def set_bought_token_amount(self, account: Account, amount: int):
+    def set_bought_amount(self, account: Account, amount: int):
         call_txn = transaction.ApplicationCallTxn(
             sender=self.creator.get_address(),
             sp=self.algod.suggested_params(),
@@ -131,7 +122,6 @@ class StoringPool:
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)
-        
         wait_for_confirmation(self.algod, tx_id)
         
     def buy(self, seller: Account, buyer: Account, amount: int):
@@ -147,5 +137,4 @@ class StoringPool:
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)
-        
         wait_for_confirmation(self.algod, tx_id)
