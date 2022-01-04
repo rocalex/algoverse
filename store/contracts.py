@@ -31,12 +31,12 @@ class StoreContract:
             Assert(
                 And(
                     Txn.sender() == Global.creator_address(),
-                    Txn.application_args.length() == Int(1),
+                    Txn.applications.length() == Int(3),
                 )
             ),
-            App.globalPut(self.Vars.trade_app_id_key, Txn.applications[0]),
-            App.globalPut(self.Vars.bid_app_id_key, Txn.applications[1]),
-            App.globalPut(self.Vars.auction_app_id_key, Txn.applications[2]),
+            App.globalPut(self.Vars.trade_app_id_key, Txn.applications[1]),
+            App.globalPut(self.Vars.bid_app_id_key, Txn.applications[2]),
+            App.globalPut(self.Vars.auction_app_id_key, Txn.applications[3]),
             Approve()
         )
     
