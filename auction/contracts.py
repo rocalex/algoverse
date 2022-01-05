@@ -4,12 +4,12 @@ from pyteal import *
 def approval_program():
     
     # for global state
-    store_app_address_key = Bytes("SAA")
-    distribution_app_address_key = Bytes("DAA")
-    team_wallet_address_key = Bytes("TWA")
+    store_app_id_key = Bytes("SA_ID")
+    staking_address_key = Bytes("SA_ADDR")
+    team_wallet_address_key = Bytes("TW_ADDR")
     
     # for local state
-    seller_key = Bytes("S_ADDR")
+    seller_address_key = Bytes("S_ADDR")
     token_id_key = Bytes("TK_ID")
     token_amount_key = Bytes("TKA")
     start_time_key = Bytes("ST")
@@ -17,55 +17,21 @@ def approval_program():
     reserve_amount_key = Bytes("RA")
     min_bid_increment_key = Bytes("MBI")
     num_bids_key = Bytes("NB")
-    lead_bid_amount_key = Bytes("LBA")
+    lead_bid_price_key = Bytes("LBP")
     lead_bid_account_key = Bytes("LB_ADDR")
     
     
     @Subroutine(TealType.uint64)
-    def is_opening(bid_index: Expr, asset_id: Expr) -> Expr:
-        return And(
-            App.localGet(bid_index, bid_token_id_key),
-            asset_id == App.localGet(bid_index, bid_token_id_key),
-            App.localGet(bid_index, bid_amount_key),
-            App.localGet(bid_index, bid_price_key),
-        )
-    
-    @Subroutine(TealType.none)
-    def handle_bid(bidder: Expr, bid_index: Expr, asset_id: Expr, amount: Expr, price: Expr) -> Expr:
-        return Seq(
-            If(is_opening(bid_index, asset_id)).Then(
-                #return payment
-                send_payments(bidder, App.localGet(bid_index, bid_price_key), Int(0)),
-            ),
-            
-            App.localPut(bid_index, bid_token_id_key, asset_id),
-            App.localPut(bid_index, bid_amount_key, amount),
-            App.localPut(bid_index, bid_price_key, price),
-        )
-    
-    @Subroutine(TealType.none)
-    def handle_cancel_bid(bidder: Expr, bid_index: Expr) -> Expr:
-        return Seq(
-            # return payment
-            send_payments(bidder, App.localGet(bid_index, bid_price_key), Int(0)),
-            
-            App.localPut(bid_index, bid_token_id_key, Int(0)),
-            App.localPut(bid_index, bid_amount_key, Int(0)),
-            App.localPut(bid_index, bid_price_key, Int(0)),
-        )
-    
-    @Subroutine(TealType.none)
-    def handle_accept(seller: Expr, bidder: Expr, bid_index: Expr) -> Expr:
-        return Seq(
-            # send payment to seller
-            send_payments(seller, App.localGet(bid_index, bid_price_key), Int(1)),
-            
-            # send asset to bidder
-            send_token_to(bidder, App.localGet(bid_index, bid_token_id_key), App.localGet(bid_index, bid_amount_key)),
-            
-            App.localPut(bid_index, bid_token_id_key, Int(0)),
-            App.localPut(bid_index, bid_amount_key, Int(0)),
-            App.localPut(bid_index, bid_price_key, Int(0)),
+    def is_open(seller: Expr, auction_index: Expr) -> Expr:
+        return If(And(
+            App.localGet(auction_index, token_id_key),
+            App.localGet(auction_index, token_amount_key),
+            Global.latest_timestamp() > start_time,
+            Global.latest_timestamp() < end_time
+        )).Then(
+            Return(App.localGet(auction_index, seller_address_key) == seller)
+        ).Else(
+            Return(Int(0))
         )
     
     @Subroutine(TealType.none)
@@ -109,7 +75,6 @@ def approval_program():
                     {
                         TxnField.type_enum: TxnType.AssetTransfer,
                         TxnField.xfer_asset: asset_id,
-                        TxnField.asset_sender: Global.zero_address(),
                         TxnField.asset_receiver: account,
                         TxnField.asset_amount: asset_amount,
                     }
@@ -149,7 +114,7 @@ def approval_program():
                             {
                                 TxnField.type_enum: TxnType.Payment,
                                 TxnField.amount: amount * Int(3) / Int(200),
-                                TxnField.receiver: App.globalGet(distribution_app_address_key),
+                                TxnField.receiver: App.globalGet(staking_address_key),
                             }
                         ),
                         InnerTxnBuilder.Submit(),
@@ -172,14 +137,14 @@ def approval_program():
         )
 
     @Subroutine(TealType.none)
-    def repay_previous_lead_bidder(prev_lead_bidder: Expr, prev_lead_bid_amount: Expr) -> Expr:
+    def repay_previous_lead_seller(prev_lead_seller: Expr, prev_lead_bid_amount: Expr) -> Expr:
         return Seq(
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields(
                 {
                     TxnField.type_enum: TxnType.Payment,
                     TxnField.amount: prev_lead_bid_amount - Global.min_txn_fee(),
-                    TxnField.receiver: prev_lead_bidder,
+                    TxnField.receiver: prev_lead_seller,
                 }
             ),
             InnerTxnBuilder.Submit(),
@@ -187,20 +152,35 @@ def approval_program():
   
 
     on_create = Seq(
-        App.globalPut(store_app_address_key, Txn.application_args[0]),
-        App.globalPut(distribution_app_address_key, Txn.application_args[1]),
-        App.globalPut(team_wallet_address_key, Txn.application_args[2]),
+        Assert(
+            And(
+                Txn.applications.length() == Int(1),
+                Txn.accounts.length() == Int(2),
+            )
+        ),
+        App.globalPut(store_app_id_key, Txn.applications[1]),
+        App.globalPut(staking_address_key, Txn.accounts[1]),
+        App.globalPut(team_wallet_address_key, Txn.accounts[2]),
         Approve(),
     )
 
+    on_setup_txn_index = Txn.group_index() - Int(1)
     start_time = Btoi(Txn.application_args[5])
     end_time = Btoi(Txn.application_args[6])
     reserve_amount = Btoi(Txn.application_args[7])
+    auction_index = Txn.accounts[1]
     on_setup = Seq(
         Assert(
             And(
+                # payment to opt into asset
+                Gtxn[on_setup_txn_index].type_enum() == TxnType.Payment,
+                Gtxn[on_setup_txn_index].sender() == Txn.sender(),
+                Gtxn[on_setup_txn_index].receiver() == Global.current_application_address(),
+                Gtxn[on_setup_txn_index].amount() >= Global.min_txn_fee() + Int(428000),
+                
                 Global.latest_timestamp() < start_time,
                 start_time < end_time,
+                
                 # TODO: should we impose a maximum auction length?
                 reserve_amount > Global.min_txn_fee(),
                 
@@ -209,67 +189,123 @@ def approval_program():
             )
         ),
         
-        App.globalPut(seller_key, Txn.application_args[2]),
-        App.globalPut(token_id_key, Btoi(Txn.application_args[3])),
-        App.globalPut(token_amount_key, Btoi(Txn.application_args[4])),
-        App.globalPut(start_time_key, start_time),
-        App.globalPut(end_time_key, end_time),
-        App.globalPut(reserve_amount_key, reserve_amount),
-        App.globalPut(min_bid_increment_key, Btoi(Txn.application_args[8])), # why do we need this?
-        App.globalPut(lead_bid_account_key, Global.zero_address()),
-        App.globalPut(lead_bid_amount_key, Int(0)),
-        App.globalPut(num_bids_key, Int(0)),
+        # save auction information into local state
+        App.localPut(auction_index, seller_address_key, Txn.sender()),
+        App.localPut(auction_index, token_id_key, Txn.assets[0]),
+        App.localPut(auction_index, token_amount_key, Btoi(Txn.application_args[4])),
+        App.localPut(auction_index, start_time_key, start_time),
+        App.localPut(auction_index, end_time_key, end_time),
+        App.localPut(auction_index, reserve_amount_key, reserve_amount),
+        App.localPut(auction_index, min_bid_increment_key, Btoi(Txn.application_args[8])),
+        App.localPut(auction_index, lead_bid_account_key, Global.zero_address()),
+        App.localPut(auction_index, lead_bid_price_key, Int(0)),
+        App.localPut(auction_index, num_bids_key, Int(0)),
         
-        # opt into NFT asset -- because you can't opt in if you're already opted in, this is what
+        # opt into asset -- because you can't opt in if you're already opted in, this is what
         # we'll use to make sure the contract has been set up
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields(
-            {
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: App.globalGet(token_id_key),
-                TxnField.asset_receiver: Global.current_application_address(),
-            }
-        ),
-        InnerTxnBuilder.Submit(),
+        optin_asset(Txn.assets[0]),
         Approve(),
     )
 
     on_bid_txn_index = Txn.group_index() - Int(1)
-    on_bid_nft_holding = AssetHolding.balance(
-        Global.current_application_address(), App.globalGet(token_id_key)
+    on_bid_asset_holding = AssetHolding.balance(
+        Global.current_application_address(), App.localGet(auction_index, token_id_key)
     )
     on_bid = Seq(
-        on_bid_nft_holding,
+        on_bid_asset_holding,
         Assert(
             And(
+                # auction_index rekeyed address
+                Txn.accounts.length() == Int(1),
+                
                 # the auction has been set up
-                on_bid_nft_holding.hasValue(),
-                on_bid_nft_holding.value() > Int(0),
+                on_bid_asset_holding.hasValue(),
+                on_bid_asset_holding.value() > Int(0),
                 # the auction has started
-                #App.globalGet(start_time_key) <= Global.latest_timestamp(), #disabled this line for local sandbox testing
+                #App.localGet(auction_index, start_time_key) <= Global.latest_timestamp(), #disabled this line for local sandbox testing
                 # the auction has not ended
-                Global.latest_timestamp() < App.globalGet(end_time_key),
+                Global.latest_timestamp() < App.localGet(auction_index, end_time_key),
+                
                 # the actual bid payment is before the app call
                 Gtxn[on_bid_txn_index].type_enum() == TxnType.Payment,
                 Gtxn[on_bid_txn_index].sender() == Txn.sender(),
                 Gtxn[on_bid_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_bid_txn_index].amount() >= App.globalGet(reserve_amount_key),
+                Gtxn[on_bid_txn_index].amount() >= App.localGet(auction_index, reserve_amount_key) + Int(4) * Global.min_txn_fee(),
             )
         ),
         If(
             Gtxn[on_bid_txn_index].amount()
-            >= App.globalGet(lead_bid_amount_key) + App.globalGet(min_bid_increment_key)
+            >= App.localGet(auction_index, lead_bid_price_key) + App.localGet(auction_index, min_bid_increment_key) + Int(4) * Global.min_txn_fee()
         ).Then(
             Seq(
-                If(App.globalGet(lead_bid_account_key) != Global.zero_address()).Then(
-                    repay_previous_lead_bidder(
-                        App.globalGet(lead_bid_account_key),
-                        App.globalGet(lead_bid_amount_key),
+                If(App.localGet(auction_index, lead_bid_account_key) != Global.zero_address()).Then(
+                    repay_previous_lead_seller(
+                        App.localGet(auction_index, lead_bid_account_key),
+                        App.localGet(auction_index, lead_bid_price_key),
                     )
                 ),
-                App.globalPut(lead_bid_amount_key, Gtxn[on_bid_txn_index].amount()),
-                App.globalPut(lead_bid_account_key, Gtxn[on_bid_txn_index].sender()),
-                App.globalPut(num_bids_key, App.globalGet(num_bids_key) + Int(1)),
+                App.localPut(auction_index, lead_bid_price_key, Gtxn[on_bid_txn_index].amount() - Int(4) * Global.min_txn_fee()),
+                App.localPut(auction_index, lead_bid_account_key, Gtxn[on_bid_txn_index].sender()),
+                App.localPut(auction_index, num_bids_key, App.localGet(auction_index, num_bids_key) + Int(1)),
+                Approve(),
+            )
+        ),
+        Reject(),
+    )
+    
+    on_store_txn_index = Txn.group_index() + Int(1)
+    on_close = Seq(
+        Assert(
+            And(
+                # auction_index(rekeyed address) and lead bidder address
+                Txn.accounts.length() == Int(4),
+                # lead bidder address
+                Txn.accounts[2] == App.localGet(auction_index, lead_bid_account_key),
+                # sender must be the seller
+                Txn.sender() == App.localGet(auction_index, seller_address_key),
+                
+                # store app call
+                Gtxn[on_store_txn_index].type_enum() == TxnType.ApplicationCall,
+                Gtxn[on_store_txn_index].sender() == Txn.sender(),
+                Gtxn[on_store_txn_index].application_id() == App.globalGet(store_app_id_key),
+                Gtxn[on_store_txn_index].application_args.length() == Int(1),
+                Gtxn[on_store_txn_index].application_args[0] == Bytes("auction"),
+                Gtxn[on_store_txn_index].accounts.length() == Int(1),
+                Gtxn[on_store_txn_index].accounts[1] == Txn.accounts[2], # lead bidder
+            )
+        ),
+        # disabled follow lines for local sandbox testing
+        If(Global.latest_timestamp() < App.localGet(auction_index, start_time_key)).Then(
+            # the auction has not yet started, it's ok to close
+            Seq(
+                # if the auction contract account has opted into the asset, close it out
+                send_token_to(Txn.sender(), App.localGet(auction_index, token_id_key), App.localGet(auction_index, token_amount_key)),
+                Approve(),
+            )
+        ),
+        If(App.localGet(auction_index, end_time_key) <= Global.latest_timestamp()).Then(
+            Seq(
+                # the auction has ended, pay out assets
+                If(App.localGet(auction_index, lead_bid_account_key) != Global.zero_address())
+                .Then(
+                    Seq(
+                        # the auction was successful: send lead bid account the asset
+                        send_token_to(
+                            App.localGet(auction_index, lead_bid_account_key),
+                            App.localGet(auction_index, token_id_key),
+                            App.localGet(auction_index, token_amount_key),
+                        ),
+                        
+                        # send payments
+                        send_payments(App.localGet(auction_index, seller_address_key), Int(1)),
+                    )
+                )
+                .Else(
+                    Seq(
+                        # the auction was not successful because no bids were placed: return the asset to the seller
+                        send_token_to(App.localGet(auction_index, seller_address_key), App.localGet(auction_index, token_id_key), App.localGet(auction_index, token_amount_key)),
+                    )
+                ),
                 Approve(),
             )
         ),
@@ -280,73 +316,12 @@ def approval_program():
     on_call = Cond(
         [on_call_method == Bytes("setup"), on_setup],
         [on_call_method == Bytes("bid"), on_bid],
+        [on_call_method == Bytes("close"), on_close],
     )
 
     on_delete = Seq(
-        #disabled follow lines for local sandbox testing
-        # If(Global.latest_timestamp() < App.globalGet(start_time_key)).Then(
-        #     Seq(
-        #         # the auction has not yet started, it's ok to delete
-        #         Assert(
-        #             Or(
-        #                 # sender must either be the seller or the auction creator
-        #                 Txn.sender() == App.globalGet(seller_key),
-        #                 Txn.sender() == Global.creator_address(),
-        #             )
-        #         ),
-        #         # if the auction contract account has opted into the nft, close it out
-        #         close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key)),
-        #         # if the auction contract still has funds, send them all to the seller // how can has funds?
-        #         close_payments(Int(0)),
-        #         Approve(),
-        #     )
-        # ),
-        # If(App.globalGet(end_time_key) <= Global.latest_timestamp()).Then(
-        #     Seq(
-                # the auction has ended, pay out assets
-                If(App.globalGet(lead_bid_account_key) != Global.zero_address())
-                .Then(
-                    If(App.globalGet(lead_bid_amount_key)
-                        >= App.globalGet(reserve_amount_key))
-                    .Then(
-                        Seq(
-                            # the auction was successful: send lead bid account the nft
-                            close_nft_to(
-                                App.globalGet(token_id_key),
-                                App.globalGet(lead_bid_account_key),
-                            ),
-                            # send remaining funds to the seller
-                            close_payments(Int(1)),   
-                        )
-                    )
-                    .Else(
-                        Seq(
-                            # the auction was not successful because the reserve was not met: return
-                            # the nft to the seller and repay the lead bidder
-                            close_nft_to(
-                                App.globalGet(token_id_key), App.globalGet(seller_key)
-                            ),
-                            repay_previous_lead_bidder(
-                                App.globalGet(lead_bid_account_key),
-                                App.globalGet(lead_bid_amount_key),
-                            ),
-                            # send remaining funds to the seller
-                            close_payments(Int(0)),
-                        )
-                    )
-                )
-                .Else(
-                    Seq(
-                        # the auction was not successful because no bids were placed: return the nft to the seller
-                        close_nft_to(App.globalGet(token_id_key), App.globalGet(seller_key)),
-                        # send remaining funds to the seller
-                        close_payments(Int(0)),
-                    )
-                ),
-                Approve(),
-            # )
-        # ),
-        # Reject(),
+        # Reject()
+        Approve() # for test
     )
 
     program = Cond(

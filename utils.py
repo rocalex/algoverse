@@ -222,7 +222,6 @@ def optin_app_rekeyed_address(client: AlgodClient, app_id: int, sender: Account,
     )
     signed_txn = txn.sign(sender.get_private_key())
     client.send_transaction(signed_txn)
-    
     wait_for_confirmation(client, signed_txn.get_txid())
     
     
@@ -234,7 +233,6 @@ def optout_app(client: AlgodClient, app_id: int, sender: Account):
     )
     signed_txn = txn.sign(sender.get_private_key())
     client.send_transaction(signed_txn)
-    
     wait_for_confirmation(client, signed_txn.get_txid())
     
     
@@ -253,9 +251,7 @@ def optin_asset(client: AlgodClient, asset_id: int, sender: Account):
         index=asset_id
     )
     signed_txn = txn.sign(sender.get_private_key())
-
     client.send_transaction(signed_txn)
-
     wait_for_confirmation(client, signed_txn.get_txid())
     
     
@@ -267,16 +263,23 @@ def generate_account_keypair():
     return private_key, address
     
 
-def generate_rekeyed_account_keypair(client: AlgodClient, rekey_to: Account):
+def generate_rekeyed_address(client: AlgodClient, rekey_to: Account, optin_price: int):
+    """Generate rekeyed address and charge balance to optin app.   
+
+    Args:
+        client: An Algod client.
+        rekey_to: Auth address.
+        optin_price: Additional min balance to optin app.
+    """
     private_key, address = generate_account_keypair()
     
     funding_amount = (
         # min account balance
         100_000
         # additional min balance to opt into app: 100000 + 28500 * 3 + 50000
-        + 235_500
-        # min txn fee
-        + 2_000
+        + optin_price
+        # min txn fee for rekeying
+        + 1_000
     )
 
     fund_account_txn = transaction.PaymentTxn(
@@ -304,19 +307,11 @@ def generate_rekeyed_account_keypair(client: AlgodClient, rekey_to: Account):
     return address
 
 
-def transfer_optin_price(client: AlgodClient, sender: Account, receiver: str):
-    fund_amount = (
-        100_000
-        # additional min balance to opt into app
-        + 135_500
-        # min txn fee
-        + 1_000
-    )
-
+def charge_optin_price(client: AlgodClient, sender: Account, receiver: str, optin_price: int):
     fund_account_txn = transaction.PaymentTxn(
         sender=sender.get_address(),
         receiver=receiver,
-        amt=fund_amount,
+        amt=optin_price,
         sp=client.suggested_params(),
     )
     signed_fund_txn = fund_account_txn.sign(sender.get_private_key())

@@ -13,7 +13,7 @@ class StoreContract:
         # for local state
         sold_amount_key = Bytes("SA")
         bought_amount_key = Bytes("BA")
-        
+        lead_bid_price_key = Bytes("LBP")
         
     @Subroutine(TealType.bytes)
     def get_app_address(appID: Expr) -> Expr:
@@ -79,7 +79,7 @@ class StoreContract:
             Approve()
         )
     
-    def on_buy(self): # use for trade
+    def on_buy(self): # use for trade contract
         seller_sold_amount = App.localGet(Txn.accounts[1], self.Vars.sold_amount_key)
         buyer_bought_amount = App.localGet(Txn.sender(), self.Vars.bought_amount_key)
         on_pay_txn_index = Txn.group_index() - Int(2)
@@ -117,7 +117,7 @@ class StoreContract:
             Approve()
         )
     
-    def on_sell(self): # use for bid
+    def on_sell(self): # use for bid contract
         seller_sold_amount = App.localGet(Txn.sender(), self.Vars.sold_amount_key)
         buyer_bought_amount = App.localGet(Txn.accounts[1], self.Vars.bought_amount_key)
         on_asset_txn_index = Txn.group_index() - Int(2)
@@ -150,6 +150,38 @@ class StoreContract:
             App.globalPut(self.Vars.total_bought_amount_key, Btoi(Gtxn[on_sell_txn_index].application_args[1]) + App.globalGet(self.Vars.total_bought_amount_key)),
             Approve()
         )
+    
+    def on_auction(self): # use for auction contract
+        seller_sold_amount = App.localGet(Txn.sender(), self.Vars.sold_amount_key)
+        buyer_bought_amount = App.localGet(Txn.accounts[1], self.Vars.bought_amount_key)
+        on_auction_txn_index = Txn.group_index() - Int(1)
+        auction_index = Gtxn[on_auction_txn_index].accounts[1]
+        lead_bid_price = App.localGet(auction_index, self.Vars.lead_bid_price_key) 
+        return Seq(
+            Assert(
+                And(
+                    # auction app close call
+                    Gtxn[on_auction_txn_index].type_enum() == TxnType.ApplicationCall,
+                    Gtxn[on_auction_txn_index].sender() == Txn.sender(),
+                    Gtxn[on_auction_txn_index].application_id() == App.globalGet(self.Vars.auction_app_id_key),
+                    
+                    Gtxn[on_auction_txn_index].application_args.length() == Int(1),
+                    Gtxn[on_auction_txn_index].application_args[0] == Bytes("close"),
+                    
+                    Gtxn[on_auction_txn_index].accounts.length() == Int(4),
+                    Txn.accounts.length() == Int(1),
+                    Gtxn[on_auction_txn_index].accounts[2] == Txn.accounts[1], # lead bidder
+                    
+                    lead_bid_price > Int(0)
+                )
+            ),
+            
+            App.localPut(Txn.sender(), self.Vars.sold_amount_key, seller_sold_amount + lead_bid_price),
+            App.localPut(Txn.accounts[1], self.Vars.bought_amount_key, buyer_bought_amount + lead_bid_price),
+            App.globalPut(self.Vars.total_sold_amount_key, lead_bid_price + App.globalGet(self.Vars.total_sold_amount_key)),
+            App.globalPut(self.Vars.total_bought_amount_key, lead_bid_price + App.globalGet(self.Vars.total_bought_amount_key)),
+            Approve()
+        )
         
     def on_call(self):
         on_call_method = Txn.application_args[0]
@@ -159,6 +191,7 @@ class StoreContract:
             [on_call_method == Bytes("set_bought"), self.on_set_bought()],
             [on_call_method == Bytes("buy"), self.on_buy()],
             [on_call_method == Bytes("sell"), self.on_sell()],
+            [on_call_method == Bytes("auction"), self.on_auction()],
         )
         
     def on_delete(self): 

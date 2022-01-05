@@ -201,14 +201,16 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
             else:
                 # might have rekeyed address already but not optin app, we can use it
                 unused_rekeyed_address = rekeyed_address
-                transfer_optin_price(client, bidder, unused_rekeyed_address)
+                optin_price = 100000 + 28500 * 3 + 50000 * 1 + 1000
+                charge_optin_price(client, bidder, unused_rekeyed_address, optin_price)
                 optin_app_rekeyed_address(client, app_id, bidder, unused_rekeyed_address)
                 break
         
         # if not found, create one, and optin app for local state
         n_address = unused_rekeyed_address
         if not n_address:
-            n_address = generate_rekeyed_account_keypair(client, bidder)
+            optin_price = 100000 + 28500 * 3 + 50000 * 1 + 1000
+            n_address = generate_rekeyed_address(client, bidder, optin_price)
             optin_app_rekeyed_address(client, app_id, bidder, n_address)
             set_rekeyed_address(bidder.get_address(), n_address, 1)
     else:

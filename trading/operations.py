@@ -127,7 +127,7 @@ def setup_trading_app(
     funding_amount = (
         # min account balance
         100_000
-        # balance to opt into NFTs
+        # balance to opt into asset
         + 135_500
         # min txn fee
         + 1_000
@@ -200,14 +200,16 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
             else:
                 # might have rekeyed address already but not optin app, we can use it
                 unused_rekeyed_address = rekeyed_address
-                transfer_optin_price(client, seller, unused_rekeyed_address)
+                optin_price = 100000 + 28500 * 3 + 50000 * 1 + 1000
+                charge_optin_price(client, seller, unused_rekeyed_address, optin_price)
                 optin_app_rekeyed_address(client, app_id, seller, unused_rekeyed_address)
                 break
         
         # if not found, create one, and optin app for local state
         n_address = unused_rekeyed_address
         if not n_address:
-            n_address = generate_rekeyed_account_keypair(client, seller)
+            optin_price = 100000 + 28500 * 3 + 50000 * 1 + 1000
+            n_address = generate_rekeyed_address(client, seller, optin_price)
             optin_app_rekeyed_address(client, app_id, seller, n_address)
             set_rekeyed_address(seller.get_address(), n_address, 1)
     else:
