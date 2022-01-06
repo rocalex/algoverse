@@ -7,6 +7,7 @@ from algosdk.future import transaction
 from algosdk.logic import get_application_address
 from algosdk.v2client.algod import AlgodClient
 from pyteal.ast import app
+from pyteal.ast.global_ import Global
 
 from account import Account
 from utils import *
@@ -101,7 +102,7 @@ def setup_auction_app(
     reserve: int,
     min_bid_increment: int
 ) -> int:
-    """Create a new auction.
+    """Create a new auction and return auction_index (rekeyed address)
 
     Args:
         client: An algod client.
@@ -136,7 +137,7 @@ def setup_auction_app(
     n_address = get_usable_rekeyed_address(client=client, auther=seller, app_id=app_id)
         
     funding_amount = (
-        # balance for app to opt into asset
+        # balance for the app to opt into asset
         + 100_000
         # min txn fee
         + 1_000
@@ -151,7 +152,6 @@ def setup_auction_app(
 
     app_args = [
         b"setup",
-        token_amount.to_bytes(8, "big"),
         start_time.to_bytes(8, "big"),
         end_time.to_bytes(8, "big"),
         reserve.to_bytes(8, "big"),
@@ -176,13 +176,14 @@ def setup_auction_app(
         sp=sp,
     )
     
-    transaction.assign_group_id([fund_app_txn, setup_txn])
+    transaction.assign_group_id([fund_app_txn, setup_txn, fund_token_txn])
     signed_fund_app_txn = fund_app_txn.sign(seller.get_private_key())
     signed_setup_txn = setup_txn.sign(seller.get_private_key())
     signed_fund_token_txn = fund_token_txn.sign(seller.get_private_key())
     client.send_transactions([signed_fund_app_txn, signed_setup_txn, signed_fund_token_txn])
     
     wait_for_confirmation(client, signed_fund_app_txn.get_txid())
+    return n_address
 
     
 def get_usable_rekeyed_address(client: AlgodClient, auther: Account, app_id: int):
@@ -234,6 +235,11 @@ def place_bid(client: AlgodClient,
 
     app_local_state = get_app_local_state(client, app_id, auction_index)
     token_id = app_local_state[b"TK_ID"]
+    if token_id == 0: # invalid auction_index
+        return False
+    
+    if (is_opted_in_asset(client, token_id, bidder.get_address()) == False):
+        optin_asset(client, token_id, bidder)
 
     if any(app_local_state[b"LB_ADDR"]):
         # if "bid_account" is not the zero address
@@ -250,6 +256,7 @@ def place_bid(client: AlgodClient,
         sp=suggested_params,
     )
     
+    print('prev_bid_leader', prev_bid_leader)
     app_call_txn = transaction.ApplicationCallTxn(
         sender=bidder.get_address(),
         index=app_id,
@@ -300,23 +307,24 @@ def close_auction(client: AlgodClient,
 
     accounts: List[str] = [auction_index]
     token_id = 0
-    lead_bidder = ""
+    lead_bidder = None
     
     auction_index_local_state = get_app_local_state(client, app_id, auction_index)
-    if any(auction_index_local_state[b"TK_ID"]):
+    if auction_index_local_state[b"TK_ID"] > 0:
         token_id = auction_index_local_state[b"TK_ID"]
         
     if any(auction_index_local_state[b"LB_ADDR"]):
         lead_bidder = encoding.encode_address(auction_index_local_state[b"LB_ADDR"])
-        
-    if token_id == 0 or lead_bidder == "":
+    
+    if token_id == 0:
         return False
     
-    accounts.append(lead_bidder)
-    accounts.append(encoding.encode_address(app_global_state[b"TW_ADDR"]))
-    accounts.append(encoding.encode_address(app_global_state[b"SA_ADDR"])) 
-
+    if lead_bidder != None:
+        accounts.append(lead_bidder)
+        accounts.append(encoding.encode_address(app_global_state[b"TW_ADDR"]))
+        accounts.append(encoding.encode_address(app_global_state[b"SA_ADDR"])) 
     print(accounts)
+    
     close_txn = transaction.ApplicationCallTxn(
         sender=closer.get_address(),
         index=app_id,
@@ -327,21 +335,30 @@ def close_auction(client: AlgodClient,
         sp=sp,
     )
     
-    store_app_id = app_global_state[b"SA_ID"]
-    store_app_call_txn = transaction.ApplicationCallTxn(
-        sender=closer.get_address(),
-        index=store_app_id,
-        on_complete=transaction.OnComplete.NoOpOC,
-        app_args=[b"auction"],
-        accounts=[lead_bidder],
-        sp=sp,
-    )
-    
-    transaction.assign_group_id([close_txn, store_app_call_txn])
-    signed_close_txn = close_txn.sign(closer.get_private_key())
-    signed_store_app_call_txn = store_app_call_txn.sign(closer.get_private_key())
-    client.send_transactions([signed_close_txn, signed_store_app_call_txn])
-    
-    wait_for_confirmation(client, signed_close_txn.get_txid())
+    if len(accounts) == 4:
+        store_app_id = app_global_state[b"SA_ID"]
+        store_app_call_txn = transaction.ApplicationCallTxn(
+            sender=closer.get_address(),
+            index=store_app_id,
+            on_complete=transaction.OnComplete.NoOpOC,
+            app_args=[b"auction"],
+            accounts=[lead_bidder, auction_index],
+            foreign_apps=[app_id],
+            sp=sp,
+        )
+        
+        transaction.assign_group_id([close_txn, store_app_call_txn])
+        signed_close_txn = close_txn.sign(closer.get_private_key())
+        signed_store_app_call_txn = store_app_call_txn.sign(closer.get_private_key())
+        client.send_transactions([signed_close_txn, signed_store_app_call_txn])
+        
+        wait_for_confirmation(client, signed_close_txn.get_txid())
+        
+    else:
+        signed_close_txn = close_txn.sign(closer.get_private_key())
+        client.send_transaction(signed_close_txn)
+        
+        wait_for_confirmation(client, signed_close_txn.get_txid())
     
     return True
+

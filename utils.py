@@ -342,7 +342,7 @@ def read_rekeyed_addresses():
 
 def set_rekeyed_address(sender: str, new_address: str, optedin: int = 0):
     obj = read_rekeyed_addresses()
-    print("obj", obj)
+    #print("obj", obj)
     for key in obj:
         if (key == sender):
             obj[key][new_address] = optedin
@@ -358,3 +358,22 @@ def set_rekeyed_address(sender: str, new_address: str, optedin: int = 0):
 def get_account_info(client: AlgodClient, sender_address: str):
     account_info = client.account_info(sender_address)
     print("account_info", account_info)
+
+
+# for testing purpose
+def deleteApps(client: AlgodClient, app_ids: List[int], sender: Account):
+    for app_id in app_ids:
+        delete_txn = transaction.ApplicationDeleteTxn(
+            sender=sender.get_address(),
+            index=app_id,
+            sp=client.suggested_params(),
+        )
+        signed_delete_txn = delete_txn.sign(sender.get_private_key())
+        client.send_transaction(signed_delete_txn)
+        wait_for_confirmation(client, signed_delete_txn.get_txid())
+    
+    
+# for testing purpose
+def optoutApps(client: AlgodClient, app_ids: List[int], account: Account):
+    for app_id in app_ids:
+        optout_app(client, app_id, account)

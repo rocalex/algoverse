@@ -335,6 +335,9 @@ def accept_trade(client: AlgodClient, app_id: int, buyer: Account, seller: str, 
     store_app_id = app_global_state[b"SA_ID"]
     if is_opted_in_app(client, store_app_id, buyer.get_address()) == False:
         optin_app(client, store_app_id, buyer)
+        
+    if (is_opted_in_asset(client, token_id, buyer.get_address()) == False):
+        optin_asset(client, token_id, buyer)
     
     pay_txn = transaction.PaymentTxn(
         sender=buyer.get_address(),

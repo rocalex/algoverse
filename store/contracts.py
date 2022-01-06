@@ -156,8 +156,9 @@ class StoreContract:
         buyer_bought_amount = App.localGet(Txn.accounts[1], self.Vars.bought_amount_key)
         on_auction_txn_index = Txn.group_index() - Int(1)
         auction_index = Gtxn[on_auction_txn_index].accounts[1]
-        lead_bid_price = App.localGet(auction_index, self.Vars.lead_bid_price_key) 
+        lead_bid_price = App.localGetEx(auction_index, Int(1), self.Vars.lead_bid_price_key)
         return Seq(
+            lead_bid_price,
             Assert(
                 And(
                     # auction app close call
@@ -169,17 +170,19 @@ class StoreContract:
                     Gtxn[on_auction_txn_index].application_args[0] == Bytes("close"),
                     
                     Gtxn[on_auction_txn_index].accounts.length() == Int(4),
-                    Txn.accounts.length() == Int(1),
+                    Txn.accounts.length() == Int(2),
                     Gtxn[on_auction_txn_index].accounts[2] == Txn.accounts[1], # lead bidder
+                    auction_index == Txn.accounts[2],
                     
-                    lead_bid_price > Int(0)
+                    lead_bid_price.hasValue(),
+                    lead_bid_price.value() > Int(0)
                 )
             ),
             
-            App.localPut(Txn.sender(), self.Vars.sold_amount_key, seller_sold_amount + lead_bid_price),
-            App.localPut(Txn.accounts[1], self.Vars.bought_amount_key, buyer_bought_amount + lead_bid_price),
-            App.globalPut(self.Vars.total_sold_amount_key, lead_bid_price + App.globalGet(self.Vars.total_sold_amount_key)),
-            App.globalPut(self.Vars.total_bought_amount_key, lead_bid_price + App.globalGet(self.Vars.total_bought_amount_key)),
+            App.localPut(Txn.sender(), self.Vars.sold_amount_key, seller_sold_amount + lead_bid_price.value()),
+            App.localPut(Txn.accounts[1], self.Vars.bought_amount_key, buyer_bought_amount + lead_bid_price.value()),
+            App.globalPut(self.Vars.total_sold_amount_key, lead_bid_price.value() + App.globalGet(self.Vars.total_sold_amount_key)),
+            App.globalPut(self.Vars.total_bought_amount_key, lead_bid_price.value() + App.globalGet(self.Vars.total_bought_amount_key)),
             Approve()
         )
         
