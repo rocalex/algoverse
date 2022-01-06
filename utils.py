@@ -377,3 +377,19 @@ def deleteApps(client: AlgodClient, app_ids: List[int], sender: Account):
 def optoutApps(client: AlgodClient, app_ids: List[int], account: Account):
     for app_id in app_ids:
         optout_app(client, app_id, account)
+        
+
+def send_asset(client: AlgodClient, asset_id: int, asset_amount: int, sender: Account, receiver: Account):
+    optin_asset(client, asset_id, receiver)
+    
+    txn = transaction.AssetTransferTxn(
+        sender=sender.get_address(),
+        receiver=receiver.get_address,
+        index=asset_id,
+        amt=asset_amount,
+        sp=client.suggested_params(),
+    )
+    
+    signed_txn = txn.sign(sender.get_address())
+    client.send_transaction(signed_txn)
+    wait_for_confirmation(client, signed_txn.get_txid())

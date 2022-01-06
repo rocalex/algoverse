@@ -227,12 +227,15 @@ def place_bid(client: AlgodClient,
         bidder: The account providing the bid.
         bid_amount: The amount of the bid.
     """
-    app_address = get_application_address(app_id)
-    app_global_state = get_app_global_state(client, app_id)
-
+    
     if (is_opted_in_app(client, app_id, auction_index) == False): 
         return False
-
+    
+    app_global_state = get_app_global_state(client, app_id)
+    store_app_id = app_global_state[b"SA_ID"]
+    if (is_opted_in_app(client, store_app_id, bidder.get_address()) == False):
+        optin_app(client, store_app_id, bidder)
+    
     app_local_state = get_app_local_state(client, app_id, auction_index)
     token_id = app_local_state[b"TK_ID"]
     if token_id == 0: # invalid auction_index
@@ -249,6 +252,7 @@ def place_bid(client: AlgodClient,
 
     suggested_params = client.suggested_params()
 
+    app_address = get_application_address(app_id)
     pay_txn = transaction.PaymentTxn(
         sender=bidder.get_address(),
         receiver=app_address,
@@ -304,7 +308,7 @@ def close_auction(client: AlgodClient,
     
     if (is_opted_in_app(client, app_id, auction_index) == False): 
         return False
-
+    
     accounts: List[str] = [auction_index]
     token_id = 0
     lead_bidder = None

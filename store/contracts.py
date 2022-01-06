@@ -155,8 +155,8 @@ class StoreContract:
         seller_sold_amount = App.localGet(Txn.sender(), self.Vars.sold_amount_key)
         buyer_bought_amount = App.localGet(Txn.accounts[1], self.Vars.bought_amount_key)
         on_auction_txn_index = Txn.group_index() - Int(1)
-        auction_index = Gtxn[on_auction_txn_index].accounts[1]
-        lead_bid_price = App.localGetEx(auction_index, Int(1), self.Vars.lead_bid_price_key)
+        auction_index = Txn.accounts[2]
+        lead_bid_price = App.localGetEx(auction_index, Txn.applications[1], self.Vars.lead_bid_price_key)
         return Seq(
             lead_bid_price,
             Assert(
@@ -172,7 +172,10 @@ class StoreContract:
                     Gtxn[on_auction_txn_index].accounts.length() == Int(4),
                     Txn.accounts.length() == Int(2),
                     Gtxn[on_auction_txn_index].accounts[2] == Txn.accounts[1], # lead bidder
-                    auction_index == Txn.accounts[2],
+                    auction_index == Gtxn[on_auction_txn_index].accounts[1],
+                    
+                    Txn.applications.length() == Int(1), # auction app
+                    Txn.applications[1] == App.globalGet(self.Vars.auction_app_id_key),
                     
                     lead_bid_price.hasValue(),
                     lead_bid_price.value() > Int(0)
