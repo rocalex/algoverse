@@ -139,7 +139,9 @@ def setup_auction_app(
     funding_amount = (
         # balance for the app to opt into asset
         + 100_000
-        # min txn fee
+        # optin asset min txn fee 
+        + 1_000
+        # asset back min txn fee 
         + 1_000
     )
 
@@ -300,7 +302,7 @@ def close_auction(client: AlgodClient,
         app_id: The app ID of the auction.
         auction_index: rekeyed address has the auction information in local state.
         closer: The account initiating the close transaction. This must be
-            either the seller.
+            either the seller or creator.
     """
     app_global_state = get_app_global_state(client, app_id)
     print("app_global_state", app_global_state)
@@ -325,8 +327,8 @@ def close_auction(client: AlgodClient,
     
     if lead_bidder != None:
         accounts.append(lead_bidder)
-        accounts.append(encoding.encode_address(app_global_state[b"TW_ADDR"]))
         accounts.append(encoding.encode_address(app_global_state[b"SA_ADDR"])) 
+        accounts.append(encoding.encode_address(app_global_state[b"TW_ADDR"]))
     print(accounts)
     
     close_txn = transaction.ApplicationCallTxn(

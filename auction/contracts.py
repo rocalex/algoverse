@@ -163,7 +163,8 @@ def approval_program():
                 Gtxn[on_setup_fund_txn_index].type_enum() == TxnType.Payment,
                 Gtxn[on_setup_fund_txn_index].sender() == Txn.sender(),
                 Gtxn[on_setup_fund_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_setup_fund_txn_index].amount() >= Global.min_txn_fee() + Int(100000),
+                # fee for app to opt into asset and asset back txn, 
+                Gtxn[on_setup_fund_txn_index].amount() >= Int(2) * Global.min_txn_fee() + Int(100000),
                 
                 Gtxn[on_setup_asset_txn_index].type_enum() == TxnType.AssetTransfer,
                 Gtxn[on_setup_asset_txn_index].asset_receiver() == Global.current_application_address(),
@@ -213,10 +214,10 @@ def approval_program():
                 on_bid_asset_holding.hasValue(),
                 on_bid_asset_holding.value() > Int(0),
                 
-                # the auction has started
+                # # the auction has started
                 # App.localGet(auction_index, start_time_key) <= Global.latest_timestamp(), #disabled this line for local sandbox testing
                 
-                # the auction has not ended
+                # # the auction has not ended
                 # Global.latest_timestamp() < App.localGet(auction_index, end_time_key),
                 
                 # the actual bid payment is before the app call
@@ -249,72 +250,87 @@ def approval_program():
     
     on_store_txn_index = Txn.group_index() + Int(1)
     on_close = Seq(
+        # single call is allowing without store call
         Assert(
             And(
                 # 0: auction_index(rekeyed address)
                 Txn.accounts.length() >= Int(1),
-                # sender must be the seller
-                Txn.sender() == App.localGet(auction_index, seller_address_key),
+                # sender must be the seller or app creator
+                Or(
+                    Txn.sender() == App.localGet(auction_index, seller_address_key),
+                    Txn.sender() == Global.creator_address()
+                )
             )
         ),
+        
         # disabled follow lines for local sandbox testing
-        # If(Global.latest_timestamp() < App.localGet(auction_index, start_time_key)).Then(
-        #     # the auction has not yet started, it's ok to close
-        #     Seq(
-        #         # if the auction contract account has opted into the asset, close it out
-        #         send_token_to(Txn.sender(), App.localGet(auction_index, token_id_key), App.localGet(auction_index, token_amount_key)),
-        #         Approve(),
-        #     )
-        # ),
-        # If(App.localGet(auction_index, end_time_key) <= Global.latest_timestamp()).Then(
-        #     Seq(
-                # the auction has ended, pay out assets
-                If(And(
-                    App.localGet(auction_index, lead_bid_account_key) != Global.zero_address(),
-                    Txn.accounts.length() == Int(4),
-                    Txn.accounts[2] == App.localGet(auction_index, lead_bid_account_key),
-                    Txn.accounts[3] == App.globalGet(staking_address_key),
-                    Txn.accounts[4] == App.globalGet(team_wallet_address_key),
-                    
-                    # store app call
-                    Gtxn[on_store_txn_index].type_enum() == TxnType.ApplicationCall,
-                    Gtxn[on_store_txn_index].sender() == Txn.sender(),
-                    Gtxn[on_store_txn_index].application_id() == App.globalGet(store_app_id_key),
-                    Gtxn[on_store_txn_index].application_args.length() == Int(1),
-                    Gtxn[on_store_txn_index].application_args[0] == Bytes("auction"),
-                    Gtxn[on_store_txn_index].accounts.length() == Int(1),
-                    Gtxn[on_store_txn_index].accounts[1] == Txn.accounts[2], # lead bidder
-                ))
-                .Then(
+        If(Global.latest_timestamp() < App.localGet(auction_index, start_time_key)).Then(
+            # the auction has not yet started, it's ok to close
+            Seq(
+                # return the asset to the seller
+                send_token_to(Txn.sender(), 
+                              App.localGet(auction_index, token_id_key), 
+                              App.localGet(auction_index, token_amount_key)),
+                Approve(),
+            )
+        ),
+        
+        # the auction has ended, pay out assets
+        If(Global.latest_timestamp() >= App.localGet(auction_index, end_time_key)).Then(
+            Seq(
+                If(App.localGet(auction_index, lead_bid_account_key) == Global.zero_address())
+                .Then( 
+                    # the auction has ended, but there is not bidder
                     Seq(
-                        # the auction was successful: send lead bid account the asset
-                        send_token_to(
-                            App.localGet(auction_index, lead_bid_account_key),
-                            App.localGet(auction_index, token_id_key),
-                            App.localGet(auction_index, token_amount_key),
-                        ),
-                        
-                        # send payments
-                        send_payments(
-                            Txn.sender(), 
-                            App.localGet(auction_index, lead_bid_price_key), 
-                            Int(1)),
+                        # return the asset to the seller
+                        send_token_to(Txn.sender(), 
+                                      App.localGet(auction_index, token_id_key), 
+                                      App.localGet(auction_index, token_amount_key)),
+                        Approve(),
                     )
-                )
-                .Else(
+                ).Else(
+                    # single call is not allowing, if there is a bidder
                     Seq(
-                        # the auction was not successful because no bids were placed: return the asset to the seller
-                        send_token_to(
-                            Txn.sender(), 
-                            App.localGet(auction_index, token_id_key), 
-                            App.localGet(auction_index, token_amount_key)
-                        ),
+                        If(And(
+                            Txn.accounts.length() == Int(4),
+                            Txn.accounts[2] == App.localGet(auction_index, lead_bid_account_key),
+                            Txn.accounts[3] == App.globalGet(staking_address_key),
+                            Txn.accounts[4] == App.globalGet(team_wallet_address_key),
+                            
+                            # store app call
+                            Gtxn[on_store_txn_index].type_enum() == TxnType.ApplicationCall,
+                            Gtxn[on_store_txn_index].sender() == Txn.sender(),
+                            Gtxn[on_store_txn_index].application_id() == App.globalGet(store_app_id_key),
+                            Gtxn[on_store_txn_index].application_args.length() == Int(1),
+                            Gtxn[on_store_txn_index].application_args[0] == Bytes("auction"),
+                            Gtxn[on_store_txn_index].accounts.length() == Int(2),
+                            Gtxn[on_store_txn_index].accounts[1] == Txn.accounts[2], # lead bidder
+                            Gtxn[on_store_txn_index].accounts[2] == auction_index, # auction_index(rekeyed address)
+                        ))
+                        .Then(
+                            Seq(
+                                # the auction was successful: send lead bid account the asset
+                                send_token_to(
+                                    App.localGet(auction_index, lead_bid_account_key),
+                                    App.localGet(auction_index, token_id_key),
+                                    App.localGet(auction_index, token_amount_key),
+                                ),
+                                
+                                # send payments
+                                send_payments(
+                                    Txn.sender(), 
+                                    App.localGet(auction_index, lead_bid_price_key), 
+                                    Int(1)),
+                                
+                                Approve(),
+                            )
+                        )
                     )
                 ),
-                Approve(),
-        #     )
-        # ),
-        # Reject(),
+            )
+        ),
+        
+        Reject(),
     )
 
     on_call_method = Txn.application_args[0]

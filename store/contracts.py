@@ -13,6 +13,7 @@ class StoreContract:
         # for local state
         sold_amount_key = Bytes("SA")
         bought_amount_key = Bytes("BA")
+        lead_bid_account_key = Bytes("LB_ADDR")
         lead_bid_price_key = Bytes("LBP")
         
     @Subroutine(TealType.bytes)
@@ -156,36 +157,45 @@ class StoreContract:
         buyer_bought_amount = App.localGet(Txn.accounts[1], self.Vars.bought_amount_key)
         on_auction_txn_index = Txn.group_index() - Int(1)
         auction_index = Txn.accounts[2]
+        lead_bidder = App.localGetEx(auction_index, Txn.applications[1], self.Vars.lead_bid_account_key)
         lead_bid_price = App.localGetEx(auction_index, Txn.applications[1], self.Vars.lead_bid_price_key)
         return Seq(
+            lead_bidder,
             lead_bid_price,
-            Assert(
-                And(
-                    # auction app close call
-                    Gtxn[on_auction_txn_index].type_enum() == TxnType.ApplicationCall,
-                    Gtxn[on_auction_txn_index].sender() == Txn.sender(),
-                    Gtxn[on_auction_txn_index].application_id() == App.globalGet(self.Vars.auction_app_id_key),
-                    
-                    Gtxn[on_auction_txn_index].application_args.length() == Int(1),
-                    Gtxn[on_auction_txn_index].application_args[0] == Bytes("close"),
-                    
-                    Gtxn[on_auction_txn_index].accounts.length() == Int(4),
-                    Txn.accounts.length() == Int(2),
-                    Gtxn[on_auction_txn_index].accounts[2] == Txn.accounts[1], # lead bidder
-                    auction_index == Gtxn[on_auction_txn_index].accounts[1],
-                    
-                    Txn.applications.length() == Int(1), # auction app
-                    Txn.applications[1] == App.globalGet(self.Vars.auction_app_id_key),
-                    
-                    lead_bid_price.hasValue(),
-                    lead_bid_price.value() > Int(0)
-                )
-            ),
             
-            App.localPut(Txn.sender(), self.Vars.sold_amount_key, seller_sold_amount + lead_bid_price.value()),
-            App.localPut(Txn.accounts[1], self.Vars.bought_amount_key, buyer_bought_amount + lead_bid_price.value()),
-            App.globalPut(self.Vars.total_sold_amount_key, lead_bid_price.value() + App.globalGet(self.Vars.total_sold_amount_key)),
-            App.globalPut(self.Vars.total_bought_amount_key, lead_bid_price.value() + App.globalGet(self.Vars.total_bought_amount_key)),
+            If(And(
+                lead_bidder.value() != Global.zero_address(),
+                lead_bid_price.value() > Int(0)
+            ))
+            .Then(Seq(
+                # there are bids
+                Assert(
+                    And(
+                        # auction app close call
+                        Gtxn[on_auction_txn_index].type_enum() == TxnType.ApplicationCall,
+                        Gtxn[on_auction_txn_index].sender() == Txn.sender(), # sellor or creator
+                        
+                        Gtxn[on_auction_txn_index].application_id() == App.globalGet(self.Vars.auction_app_id_key),
+                        
+                        Gtxn[on_auction_txn_index].application_args.length() == Int(1),
+                        Gtxn[on_auction_txn_index].application_args[0] == Bytes("close"),
+                        
+                        Gtxn[on_auction_txn_index].accounts.length() == Int(4),
+                        Txn.accounts.length() == Int(2),
+                        Gtxn[on_auction_txn_index].accounts[2] == Txn.accounts[1], # lead bidder
+                        lead_bidder.value() == Txn.accounts[1],
+                        auction_index == Gtxn[on_auction_txn_index].accounts[1],
+                        
+                        Txn.applications.length() == Int(1), # auction app
+                        Txn.applications[1] == App.globalGet(self.Vars.auction_app_id_key),
+                    )
+                ),
+                
+                App.localPut(Txn.sender(), self.Vars.sold_amount_key, seller_sold_amount + lead_bid_price.value()),
+                App.localPut(Txn.accounts[1], self.Vars.bought_amount_key, buyer_bought_amount + lead_bid_price.value()),
+                App.globalPut(self.Vars.total_sold_amount_key, lead_bid_price.value() + App.globalGet(self.Vars.total_sold_amount_key)),
+                App.globalPut(self.Vars.total_bought_amount_key, lead_bid_price.value() + App.globalGet(self.Vars.total_bought_amount_key)),      
+            )),
             Approve()
         )
         
