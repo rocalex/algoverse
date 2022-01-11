@@ -71,7 +71,8 @@ def create_trading_app(
         clear_program=clear,
         global_schema=global_schema,
         local_schema=local_schema,
-        app_args=app_args,
+        app_args=[],
+        foreign_apps=[store_app_id],
         accounts=[staking_address.get_address(), team_wallet_address.get_address()],
         sp=sp,
     )
@@ -329,7 +330,7 @@ def accept_trade(client: AlgodClient, app_id: int, buyer: Account, seller: str, 
     print(f"price", trading_price)
     
     # check if buyer has enough algo
-    if get_balances(client, seller)[0] < trading_price:
+    if get_balances(client, buyer.get_address())[0] < trading_price:
         return False
     
     store_app_id = app_global_state[b"SA_ID"]

@@ -174,10 +174,10 @@ def approval_program():
                 # staking app address and team wallet address
                 Txn.accounts.length() == Int(2),
                 # store app id
-                Txn.application_args.length() == Int(1),
+                Txn.applications.length() == Int(1),
             )
         ),
-        App.globalPut(store_app_id_key, Btoi(Txn.application_args[0])),
+        App.globalPut(store_app_id_key, Txn.applications[1]),
         App.globalPut(staking_address_key, Txn.accounts[1]),
         App.globalPut(team_wallet_address_key, Txn.accounts[2]),
         Approve(),

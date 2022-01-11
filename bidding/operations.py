@@ -60,7 +60,6 @@ def create_bidding_app(
     team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
     
     app_args = [
-        store_app_id.to_bytes(8, "big"),
         # encoding.decode_address(staking_address.get_address()),
         # encoding.decode_address(team_wallet_address.get_address()),
     ]
@@ -74,6 +73,7 @@ def create_bidding_app(
         global_schema=global_schema,
         local_schema=local_schema,
         app_args=app_args,
+        foreign_apps=[store_app_id],
         accounts=[staking_address.get_address(), team_wallet_address.get_address()],
         sp=sp,
     )
