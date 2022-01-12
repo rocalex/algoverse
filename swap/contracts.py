@@ -178,12 +178,32 @@ def approval_program():
             And(
                 # staking app address and team wallet address
                 Txn.accounts.length() == Int(2),
-                # store app id
-                Txn.application_args.length() == Int(1),
             )
         ),
         App.globalPut(staking_address_key, Txn.accounts[1]),
         App.globalPut(team_wallet_address_key, Txn.accounts[2]),
+        Approve(),
+    )
+
+    on_setup_txn_index = Txn.group_index() - Int(1)
+    i = ScratchVar(TealType.uint64)
+    on_setup = Seq(
+        # opt into NFT asset -- because you can't opt in if you're already opted in, this is what
+        # we'll use to make sure the contract has been set up
+        Assert(
+            And(
+                # payment to opt into asset
+                Gtxn[on_setup_txn_index].type_enum() == TxnType.Payment,
+                Gtxn[on_setup_txn_index].sender() == Txn.sender(),
+                Gtxn[on_setup_txn_index].receiver() == Global.current_application_address(),
+                Txn.assets.length() > Int(0),
+                
+                Gtxn[on_setup_txn_index].amount() >= Txn.assets.length() * (Global.min_txn_fee() + Int(100000)),
+            )
+        ),
+        For(i.store(Int(0)), i.load() < Txn.assets.length(), i.store(i.load() + Int(1))).Do(
+            optin_asset(Txn.assets[i.load()]),
+        ),
         Approve(),
     )
 
@@ -194,33 +214,36 @@ def approval_program():
         # we'll use to make sure the contract has been set up
         Assert(
             And(
-                # payment to opt into asset
-                Gtxn[on_swap_pay_txn_index].type_enum() == TxnType.Payment,
-                Gtxn[on_swap_pay_txn_index].sender() == Txn.sender(),
-                Gtxn[on_swap_pay_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_swap_pay_txn_index].amount() >= Global.min_txn_fee() + Int(100000),
-                
                 # asset transfer
                 Gtxn[on_swap_asset_txn_index].type_enum() == TxnType.AssetTransfer,
                 Gtxn[on_swap_asset_txn_index].asset_receiver() == Global.current_application_address(),
-                Gtxn[on_swap_asset_txn_index].xfer_asset() > 0,
+                Gtxn[on_swap_asset_txn_index].xfer_asset() > Int(0),
                 Gtxn[on_swap_asset_txn_index].asset_amount() > Int(0),
                 
-                # assets
-                Txn.assets.length() == Int(2), 
+                # swap_index
+                Txn.accounts.length() ==  Int(1),
+                
+                # may include old asset to return back, should add payment txn for fee in group txn
+                Txn.assets.length() >= Int(2),
                 Txn.assets[0] > Int(0), # offering
                 Txn.assets[1] > Int(0), # accepting
                 
                 # accepting asset amount
                 Txn.application_args.length() == Int(2),
                 Btoi(Txn.application_args[1]) > Int(0),
-                
-                # swap_index
-                Txn.accounts.length() ==  Int(1),
-                
             )
         ),
-        optin_asset(Txn.assets[0]),
+        If (is_open(Txn.sender(), Txn.accounts[1])).Then(
+            If(Not(And(
+                # the fee payment txn is before the app call
+                Gtxn[on_swap_pay_txn_index].type_enum() == TxnType.Payment,
+                Gtxn[on_swap_pay_txn_index].sender() == Txn.sender(),
+                Gtxn[on_swap_pay_txn_index].receiver() == Global.current_application_address(),
+                Gtxn[on_swap_pay_txn_index].amount() == Int(1000),
+            ))).Then(
+                Reject()
+            )
+        ),
         handle_swap(Txn.sender(), Txn.accounts[1], Txn.assets[0], Gtxn[on_swap_asset_txn_index].asset_amount(), 
                     Txn.assets[1], Btoi(Txn.application_args[1])),
         Approve(),
@@ -248,20 +271,20 @@ def approval_program():
         Approve(),
     )
     
-    on_accept_txn_index = Txn.group_index() - Int(2)
+    on_accept_pay_txn_index = Txn.group_index() - Int(2)
     on_accept_asset_txn_index = Txn.group_index() - Int(1)
     on_accept = Seq(
         Assert(
             And(
                 # payment to opt into asset and txn
-                Gtxn[on_accept_txn_index].type_enum() == TxnType.Payment,
-                Gtxn[on_accept_txn_index].sender() == Txn.sender(), #accepter
-                Gtxn[on_accept_txn_index].amount() > Int(100000) + Global.min_txn_fee() + 2 * Global.min_txn_fee(),
-                Gtxn[on_accept_txn_index].receiver() == Global.current_application_address(),
+                Gtxn[on_accept_pay_txn_index].type_enum() == TxnType.Payment,
+                Gtxn[on_accept_pay_txn_index].sender() == Txn.sender(), #accepter
+                Gtxn[on_accept_pay_txn_index].amount() >= Int(2) * Global.min_txn_fee(),
+                Gtxn[on_accept_pay_txn_index].receiver() == Global.current_application_address(),
                 
                 # the accept asset transfer is before the app call
                 Gtxn[on_accept_asset_txn_index].type_enum() == TxnType.AssetTransfer,
-                Gtxn[on_accept_asset_txn_index].receiver() == Global.current_application_address(),
+                Gtxn[on_accept_asset_txn_index].asset_receiver() == Global.current_application_address(),
                 Gtxn[on_accept_asset_txn_index].asset_amount() > Int(0),
                 
                 # offer, swap_index(rekeyed_address), distribution app address and team wallet address
@@ -290,6 +313,7 @@ def approval_program():
 
     on_call_method = Txn.application_args[0]
     on_call = Cond(
+        [on_call_method == Bytes("setup"), on_setup],
         [on_call_method == Bytes("swap"), on_swap],
         [on_call_method == Bytes("cancel"), on_cancel],
         [on_call_method == Bytes("accept"), on_accept],
