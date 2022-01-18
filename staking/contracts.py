@@ -3,22 +3,28 @@ from pyteal import *
 
 class StakingContract:
     class Vars:
-        creator_key = Bytes("C")
+        # global state
         token_id_key = Bytes("T")
-        token_amount_key = Bytes("TA")
-        last_claimed_date_key = Bytes("CD")
         distribute_app_id_key = Bytes("DA")
-        
         lock_time_key = Bytes("PTL")
+        week_total_asset_amount_key = Bytes("WTTA") 
         distribution_algo_amount_key = Bytes("DAA") 
+        
+        # local state
+        token_amount_key = Bytes("TA")
+        last_claimed_time_key = Bytes("CDT")
+        week_withdraw_amount = Bytes("WWA")
+        week_stake_amount = Bytes("WSA")
+        
 
     def on_create(self):
         return Seq(
             Assert(Txn.assets.length() == Int(1)),
             
-            App.globalPut(self.Vars.creator_key, Txn.sender()),
             App.globalPut(self.Vars.token_id_key, Txn.assets[0]),
             App.globalPut(self.Vars.distribute_app_id_key, Txn.applications[1]),
+            # initialization of the lock time
+            App.globalPut(self.Vars.lock_time_key, Global.latest_timestamp()),
             Approve()
         )
         
@@ -26,7 +32,7 @@ class StakingContract:
         return Seq(
             Assert(
                 And(
-                    App.globalGet(self.Vars.creator_key) == Txn.sender(),
+                    Global.creator_address() == Txn.sender(),
                     App.globalGet(self.Vars.token_id_key) == Txn.assets[0]
                 )
             ),
@@ -55,13 +61,9 @@ class StakingContract:
                     Gtxn[1].application_id() == App.globalGet(self.Vars.distribute_app_id_key),
                 )
             ),
+            
             App.localPut(Txn.sender(), self.Vars.token_amount_key, Gtxn[0].asset_amount() + old_token_amount),
-            
-            # initialization of the lock time
-            If(App.globalGet(self.Vars.lock_time_key) == Int(0)).Then( 
-                App.globalPut(self.Vars.lock_time_key, Global.latest_timestamp())
-            ),
-            
+            App.localPut(Txn.sender(), self.Vars.week_stake_amount, App.localGet(Txn.sender(), self.Vars.week_stake_amount) + Gtxn[0].asset_amount()),
             Approve()
         )
         
@@ -77,6 +79,7 @@ class StakingContract:
                     requested_amount <= old_token_amount
                 )
             ),
+            
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.AssetTransfer,
@@ -86,6 +89,7 @@ class StakingContract:
             }),
             InnerTxnBuilder.Submit(),
             
+            App.localPut(Txn.sender(), self.Vars.week_withdraw_amount, App.localGet(Txn.sender(), self.Vars.week_withdraw_amount) + requested_amount),
             App.localPut(Txn.sender(), self.Vars.token_amount_key, old_token_amount - requested_amount),
             Approve()
         )
@@ -94,7 +98,7 @@ class StakingContract:
         total_amount = AssetHolding.balance(Global.current_application_address(), Txn.assets[0])
         token_amount = App.localGet(Txn.sender(), self.Vars.token_amount_key)
         algo_amount = Balance(Global.current_application_address())
-        last_claimed_date = App.localGet(Txn.sender(), self.Vars.last_claimed_date_key)
+        last_claimed_date = App.localGet(Txn.sender(), self.Vars.last_claimed_time_key)
         
         return Seq(
             total_amount,
@@ -112,22 +116,25 @@ class StakingContract:
                 )
             ),
             
-            App.localPut(Txn.sender(), self.Vars.last_claimed_date_key, App.globalGet(self.Vars.lock_time_key)),
+            If(Global.latest_timestamp() >= App.globalGet(self.Vars.lock_time_key) + Int(86400) * Int(7)).Then(
+                Seq(
+                    App.globalPut(self.Vars.distribution_algo_amount_key, algo_amount),
+                    App.globalPut(self.Vars.week_total_asset_amount_key, total_amount.value()),
+                    App.globalPut(self.Vars.lock_time_key, Global.latest_timestamp()),
+                )
+            ),
             
             InnerTxnBuilder.Begin(),
             InnerTxnBuilder.SetFields({
                 TxnField.type_enum: TxnType.Payment,
                 TxnField.receiver: Txn.sender(),
-                TxnField.amount: WideRatio([token_amount, App.globalGet(self.Vars.distribution_algo_amount_key)], [total_amount.value()]) - Int(201_000)
+                TxnField.amount: WideRatio([token_amount - App.localGet(Txn.sender(), self.Vars.week_stake_amount), App.globalGet(self.Vars.distribution_algo_amount_key)], [App.globalGet(self.Vars.week_total_asset_amount_key)]) - Int(201_000)
             }),
             InnerTxnBuilder.Submit(),
             
-            If(Global.latest_timestamp() > App.globalGet(self.Vars.lock_time_key) + Int(86400) * 30).Then(
-                Seq(
-                    App.globalPut(self.Vars.distribution_algo_amount_key, algo_amount),
-                    App.globalPut(self.Vars.lock_time_key, Global.latest_timestamp()),
-                )
-            ),
+            App.localPut(Txn.sender(), self.Vars.last_claimed_time_key, App.globalGet(self.Vars.lock_time_key)),
+            App.localPut(Txn.sender(), self.Vars.week_withdraw_amount, Int(0)),
+            App.localPut(Txn.sender(), self.Vars.week_stake_amount, Int(0)),
             
             Approve()
         )

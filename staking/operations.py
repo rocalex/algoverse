@@ -35,8 +35,8 @@ class StakingPool:
     def create_app(self):
         approval, clear = self.get_contracts()
         
-        global_schema = transaction.StateSchema(num_uints=56, num_byte_slices=1)
-        local_schema = transaction.StateSchema(num_uints=16, num_byte_slices=0)
+        global_schema = transaction.StateSchema(num_uints=5, num_byte_slices=0)
+        local_schema = transaction.StateSchema(num_uints=4, num_byte_slices=0)
         
         txn = transaction.ApplicationCreateTxn(
             sender=self.creator.get_address(),
