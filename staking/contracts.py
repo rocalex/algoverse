@@ -20,7 +20,7 @@ class StakingContract:
     # 0.01% percent
     @Subroutine
     def calculate_fraction(amount: Expr, percent: Expr):
-        return WideRatio([amount, percent], [Int(1000)])
+        return WideRatio([amount, percent], [Int(10000)])
         
 
     def on_create(self):
