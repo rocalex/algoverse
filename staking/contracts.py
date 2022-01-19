@@ -21,6 +21,21 @@ class StakingContract:
     @Subroutine
     def calculate_fraction(amount: Expr, percent: Expr):
         return WideRatio([amount, percent], [Int(10000)])
+    
+    @Subroutine(TealType.bytes)
+    def get_app_address(appID: Expr) -> Expr:
+        return Sha512_256(Concat(b"appID" , Itob(appID)))
+    
+    @Subroutine
+    def send_tokens(receiver: Expr, amount: Expr):
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields({
+            TxnField.type_enum: TxnType.AssetTransfer,
+            TxnField.xfer_asset: Txn.assets[0],
+            TxnField.asset_receiver: receiver,
+            TxnField.asset_amount: amount,
+        }),
+        InnerTxnBuilder.Submit(),
         
 
     def on_create(self):
@@ -77,21 +92,17 @@ class StakingContract:
         return Seq(
             Assert(
                 And(
-                    Global.group_size() == Int(3),
+                    Global.group_size() == Int(2),
                     
-                    Gtxn[0].type_enum() == TxnType.Payment,
-                    Gtxn[0].receiver() == Global.current_application_address(),
-                    Gtxn[0].amount() >= Global.min_txn_fee() * Int(3),
+                    Gtxn[0].type_enum() == TxnType.AssetTransfer,
+                    Gtxn[0].xfer_asset() == App.globalGet(self.Vars.token_id_key),
+                    Gtxn[0].asset_receiver() == Global.current_application_address(),
                     
-                    Gtxn[1].type_enum() == TxnType.AssetTransfer,
-                    Gtxn[1].xfer_asset() == App.globalGet(self.Vars.token_id_key),
-                    Gtxn[1].asset_receiver() == Global.current_application_address(),
+                    Gtxn[1].type_enum() == TxnType.ApplicationCall,
+                    Gtxn[1].application_args[0] == Bytes("stake"),
                     
-                    Gtxn[2].type_enum() == TxnType.ApplicationCall,
-                    Gtxn[2].application_args[0] == Bytes("stake"),
-                    Gtxn[2].application_id() == App.globalGet(self.Vars.token_app_id_key),
-                    
-                    Gtxn[0].sender() == Gtxn[2].sender()
+                    Txn.accounts.length() == Int(1),
+                    Txn.accounts[1] == self.get_app_address(App.globalGet(self.Vars.token_app_id_key))
                 )
             ),
             
@@ -99,9 +110,8 @@ class StakingContract:
             App.localPut(Txn.sender(), self.Vars.token_amount_key, self.calculate_fraction(Gtxn[0].asset_amount(), Int(9980)) + old_token_amount),
             App.localPut(Txn.sender(), self.Vars.week_stake_amount, App.localGet(Txn.sender(), self.Vars.week_stake_amount) + self.calculate_fraction(Gtxn[0].asset_amount(), Int(9980))),
             
-            # transfer burn asset self.calculate_fraction(Gtxn[0].asset_amount(), Int(20))
-            
-            # call app
+            # transfer burn asset 
+            self.send_tokens(Txn.accounts[1], self.calculate_fraction(Gtxn[0].asset_amount(), Int(20))),
             
             Approve()
         )
