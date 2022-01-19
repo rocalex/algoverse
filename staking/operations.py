@@ -1,3 +1,4 @@
+from encodings import utf_8
 from typing import Tuple
 from algosdk.future import transaction
 from algosdk.v2client.algod import AlgodClient
@@ -6,6 +7,7 @@ from .contracts import StakingContract
 
 from utils import fully_compile_contract, get_app_address, wait_for_confirmation
 from account import Account
+from time import time
 
 
 class StakingPool:
@@ -88,6 +90,21 @@ class StakingPool:
         
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
+    def set_timelock(self):
+        txn = transaction.ApplicationCallTxn(
+            sender=self.creator.get_address(),
+            sp=self.algod.suggested_params(),
+            index=self.app_id,
+            app_args=[b"set_timelock", int(time()).to_bytes(8, "big")],
+            on_complete=transaction.OnComplete.NoOpOC,
+        )
+        
+        signed_txn = txn.sign(self.creator.get_private_key())
+        
+        self.algod.send_transaction(signed_txn)
+        
+        wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
     def delete_app(self):
         txn = transaction.ApplicationDeleteTxn(
             sender=self.creator.get_address(),
@@ -131,6 +148,12 @@ class StakingPool:
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
     def stake_token(self, sender: Account, amount: int):
+        payment_txn = transaction.PaymentTxn(
+            sender=sender.get_address(),
+            sp=self.algod.suggested_params(),
+            receiver=get_app_address(self.app_id),
+            amt=3 * 1000
+        )
         transfer_txn = transaction.AssetTransferTxn(
             sender=sender.get_address(),
             sp=self.algod.suggested_params(),
@@ -147,11 +170,12 @@ class StakingPool:
                 b"stake",
             ]
         )
-        transaction.assign_group_id([transfer_txn, call_txn])
+        transaction.assign_group_id([payment_txn, transfer_txn, call_txn])
         
+        signed_payment_txn = payment_txn.sign(sender.get_private_key())
         signed_transfer_txn = transfer_txn.sign(sender.get_private_key())
         signed_call_txn = call_txn.sign(sender.get_private_key())
-        tx_id = self.algod.send_transactions([signed_transfer_txn, signed_call_txn])
+        tx_id = self.algod.send_transactions([signed_payment_txn, signed_transfer_txn, signed_call_txn])
         
         wait_for_confirmation(self.algod, tx_id)
     

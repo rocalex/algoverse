@@ -5,7 +5,7 @@ class StakingContract:
     class Vars:
         # global state
         token_id_key = Bytes("T")
-        distribute_app_id_key = Bytes("DA")
+        token_app_id_key = Bytes("TA")
         lock_time_key = Bytes("PTL")
         week_total_asset_amount_key = Bytes("WTTA") 
         distribution_algo_amount_key = Bytes("DAA") 
@@ -16,15 +16,19 @@ class StakingContract:
         week_withdraw_amount = Bytes("WWA")
         week_stake_amount = Bytes("WSA")
         
+    
+    # 0.01% percent
+    @Subroutine
+    def calculate_fraction(amount: Expr, percent: Expr):
+        return WideRatio([amount, percent], [Int(1000)])
+        
 
     def on_create(self):
         return Seq(
             Assert(Txn.assets.length() == Int(1)),
             
             App.globalPut(self.Vars.token_id_key, Txn.assets[0]),
-            App.globalPut(self.Vars.distribute_app_id_key, Txn.applications[1]),
-            # initialization of the lock time
-            App.globalPut(self.Vars.lock_time_key, Global.latest_timestamp()),
+            App.globalPut(self.Vars.token_app_id_key, Txn.applications[1]),
             Approve()
         )
         
@@ -33,7 +37,7 @@ class StakingContract:
             Assert(
                 And(
                     Global.creator_address() == Txn.sender(),
-                    App.globalGet(self.Vars.token_id_key) == Txn.assets[0]
+                    App.globalGet(self.Vars.token_id_key) == Txn.assets[0],
                 )
             ),
             
@@ -44,6 +48,27 @@ class StakingContract:
                 TxnField.asset_receiver: Global.current_application_address(),
             }),
             InnerTxnBuilder.Submit(),
+            
+            # initialization of the lock time
+            App.globalPut(self.Vars.lock_time_key, Global.latest_timestamp()),
+            
+            Approve()
+        )
+        
+    def on_set_timelock(self):
+        return Seq(
+            Assert(
+                And(
+                    Global.creator_address() == Txn.sender(),
+                    
+                    Txn.application_args.length() == Int(2),
+                )
+            ),
+            
+            # initialization of the lock time
+            #App.globalPut(self.Vars.lock_time_key, Global.latest_timestamp()),
+            App.globalPut(self.Vars.lock_time_key, Txn.application_args[1]),
+            
             Approve()
         )
         
@@ -53,17 +78,31 @@ class StakingContract:
             Assert(
                 And(
                     Global.group_size() == Int(3),
-                    Gtxn[0].type_enum() == TxnType.AssetTransfer,
-                    Gtxn[0].xfer_asset() == App.globalGet(self.Vars.token_id_key),
-                    Gtxn[0].asset_receiver() == Global.current_application_address(),
-                    Gtxn[1].type_enum() == TxnType.ApplicationCall,
-                    Gtxn[1].application_args[0] == Bytes("transfer"),
-                    Gtxn[1].application_id() == App.globalGet(self.Vars.distribute_app_id_key),
+                    
+                    Gtxn[0].type_enum() == TxnType.Payment,
+                    Gtxn[0].receiver() == Global.current_application_address(),
+                    Gtxn[0].amount() >= Global.min_txn_fee() * Int(3),
+                    
+                    Gtxn[1].type_enum() == TxnType.AssetTransfer,
+                    Gtxn[1].xfer_asset() == App.globalGet(self.Vars.token_id_key),
+                    Gtxn[1].asset_receiver() == Global.current_application_address(),
+                    
+                    Gtxn[2].type_enum() == TxnType.ApplicationCall,
+                    Gtxn[2].application_args[0] == Bytes("stake"),
+                    Gtxn[2].application_id() == App.globalGet(self.Vars.token_app_id_key),
+                    
+                    Gtxn[0].sender() == Gtxn[2].sender()
                 )
             ),
             
-            App.localPut(Txn.sender(), self.Vars.token_amount_key, Gtxn[0].asset_amount() + old_token_amount),
-            App.localPut(Txn.sender(), self.Vars.week_stake_amount, App.localGet(Txn.sender(), self.Vars.week_stake_amount) + Gtxn[0].asset_amount()),
+            # burn 0.2%
+            App.localPut(Txn.sender(), self.Vars.token_amount_key, self.calculate_fraction(Gtxn[0].asset_amount(), Int(9980)) + old_token_amount),
+            App.localPut(Txn.sender(), self.Vars.week_stake_amount, App.localGet(Txn.sender(), self.Vars.week_stake_amount) + self.calculate_fraction(Gtxn[0].asset_amount(), Int(9980))),
+            
+            # transfer burn asset self.calculate_fraction(Gtxn[0].asset_amount(), Int(20))
+            
+            # call app
+            
             Approve()
         )
         
@@ -118,7 +157,7 @@ class StakingContract:
             
             If(Global.latest_timestamp() >= App.globalGet(self.Vars.lock_time_key) + Int(86400) * Int(7)).Then(
                 Seq(
-                    App.globalPut(self.Vars.distribution_algo_amount_key, algo_amount),
+                    App.globalPut(self.Vars.distribution_algo_amount_key, algo_amount - Global.min_balance()),
                     App.globalPut(self.Vars.week_total_asset_amount_key, total_amount.value()),
                     App.globalPut(self.Vars.lock_time_key, Global.latest_timestamp()),
                 )
@@ -143,6 +182,7 @@ class StakingContract:
         on_call_method = Txn.application_args[0]
         return Cond(
             [on_call_method == Bytes("setup"), self.on_setup()],
+            [on_call_method == Bytes("set_timelock"), self.on_set_timelock()],
             [on_call_method == Bytes("stake"), self.on_stake()],
             [on_call_method == Bytes("withdraw"), self.on_withdraw()],
             [on_call_method == Bytes("claim"), self.on_claim()]
