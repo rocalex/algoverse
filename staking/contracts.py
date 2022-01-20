@@ -1,7 +1,7 @@
 from pyteal import *
 
-
 class StakingContract:
+    
     class Vars:
         # global state
         token_id_key = Bytes("T")
@@ -22,9 +22,10 @@ class StakingContract:
     def calculate_fraction(amount: Expr, percent: Expr):
         return WideRatio([amount, percent], [Int(10000)])
     
+    @staticmethod
     @Subroutine(TealType.bytes)
     def get_app_address(appID: Expr) -> Expr:
-        return Sha512_256(Concat(b"appID" , Itob(appID)))
+        return Sha512_256(Concat(Bytes("appID") , Itob(appID)))
     
     @Subroutine
     def send_tokens(receiver: Expr, amount: Expr):
@@ -104,7 +105,7 @@ class StakingContract:
                     Gtxn[1].sender() == Txn.sender(),
                     
                     Txn.accounts.length() == Int(1),
-                    Txn.accounts[1] == self.get_app_address(App.globalGet(self.Vars.token_app_id_key)),
+                    Txn.accounts[1] == StakingContract.get_app_address(App.globalGet(self.Vars.token_app_id_key)),
                 )
             ),
             
@@ -158,9 +159,6 @@ class StakingContract:
                     App.globalGet(self.Vars.token_id_key) == Txn.assets[0],
                     token_amount > Int(0),
                     total_amount.hasValue(),
-                    Global.group_size() == Int(2),
-                    Gtxn[0].type_enum() == TxnType.Payment,
-                    Gtxn[0].amount() == Int(201_000),
                     
                     # if once claimed for the current lock time, cannot claim more
                     App.globalGet(self.Vars.lock_time_key) > last_claimed_date,

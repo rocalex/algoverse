@@ -213,12 +213,6 @@ class StakingPool:
         wait_for_confirmation(self.algod, tx_id)
     
     def claim_rewards(self, sender: Account):
-        payment_txn = transaction.PaymentTxn(
-            sender=sender.get_address(),
-            sp=self.algod.suggested_params(),
-            receiver=get_app_address(self.app_id),
-            amt=201_000  # platform fee
-        )
         call_txn = transaction.ApplicationCallTxn(
             sender=sender.get_address(),
             sp=self.algod.suggested_params(),
@@ -229,10 +223,8 @@ class StakingPool:
             ],
             foreign_assets=[self.token_id]
         )
-        transaction.assign_group_id([payment_txn, call_txn])
         
-        signed_payment_txn = payment_txn.sign(sender.get_private_key())
         signed_call_txn = call_txn.sign(sender.get_private_key())
-        tx_id = self.algod.send_transactions([signed_payment_txn, signed_call_txn])
+        tx_id = self.algod.send_transaction(signed_call_txn)
         
         wait_for_confirmation(self.algod, tx_id)

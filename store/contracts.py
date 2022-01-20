@@ -16,9 +16,10 @@ class StoreContract:
         lead_bid_account_key = Bytes("LB_ADDR")
         lead_bid_price_key = Bytes("LBP")
         
+    @staticmethod
     @Subroutine(TealType.bytes)
     def get_app_address(appID: Expr) -> Expr:
-        return Sha512_256(Concat(b"appID" , Itob(appID)))
+        return Sha512_256(Concat(Bytes("appID") , Itob(appID)))
         
     def on_create(self):
         return Seq(
@@ -92,7 +93,7 @@ class StoreContract:
                     # accept payment call
                     Gtxn[on_pay_txn_index].type_enum() == TxnType.Payment,
                     Gtxn[on_pay_txn_index].sender() == Txn.sender(), # buyer
-                    # Gtxn[on_pay_txn_index].receiver() == self.get_app_address(App.globalGet(self.Vars.trade_app_id_key)),
+                    Gtxn[on_pay_txn_index].receiver() == StoreContract.get_app_address(App.globalGet(self.Vars.trade_app_id_key)),
                     
                     # trade app accept call
                     Gtxn[on_buy_txn_index].type_enum() == TxnType.ApplicationCall,
@@ -128,7 +129,7 @@ class StoreContract:
                 And(
                     # accept asset txn call
                     Gtxn[on_asset_txn_index].type_enum() == TxnType.AssetTransfer,
-                    # Gtxn[on_asset_txn_index].receiver() == self.get_app_address(App.globalGet(self.Vars.bid_app_id_key)),
+                    Gtxn[on_asset_txn_index].receiver() == StoreContract.get_app_address(App.globalGet(self.Vars.bid_app_id_key)),
                     
                     # bid app accept call
                     Gtxn[on_sell_txn_index].type_enum() == TxnType.ApplicationCall,

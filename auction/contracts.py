@@ -215,10 +215,10 @@ def approval_program():
                 on_bid_asset_holding.value() > Int(0),
                 
                 # # the auction has started
-                # App.localGet(auction_index, start_time_key) <= Global.latest_timestamp(), #disabled this line for local sandbox testing
+                App.localGet(auction_index, start_time_key) <= Global.latest_timestamp(), #disabled this line for local sandbox testing
                 
                 # # the auction has not ended
-                # Global.latest_timestamp() < App.localGet(auction_index, end_time_key),
+                Global.latest_timestamp() < App.localGet(auction_index, end_time_key),
                 
                 # the actual bid payment is before the app call
                 Gtxn[on_bid_txn_index].type_enum() == TxnType.Payment,
