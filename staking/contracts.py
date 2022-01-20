@@ -92,17 +92,19 @@ class StakingContract:
         return Seq(
             Assert(
                 And(
-                    Global.group_size() == Int(2),
+                    Global.group_size() == Int(3),
                     
                     Gtxn[0].type_enum() == TxnType.AssetTransfer,
                     Gtxn[0].xfer_asset() == App.globalGet(self.Vars.token_id_key),
                     Gtxn[0].asset_receiver() == Global.current_application_address(),
                     
                     Gtxn[1].type_enum() == TxnType.ApplicationCall,
-                    Gtxn[1].application_args[0] == Bytes("stake"),
+                    Gtxn[1].application_args[0] == Bytes("transfer"),
+                    Gtxn[1].application_id() == App.globalGet(self.Vars.token_app_id_key),
+                    Gtxn[1].sender() == Txn.sender(),
                     
                     Txn.accounts.length() == Int(1),
-                    Txn.accounts[1] == self.get_app_address(App.globalGet(self.Vars.token_app_id_key))
+                    Txn.accounts[1] == self.get_app_address(App.globalGet(self.Vars.token_app_id_key)),
                 )
             ),
             
