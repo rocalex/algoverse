@@ -125,8 +125,7 @@ class StakingContract:
         return Seq(
             Assert(
                 And(
-                    Global.group_size() == Int(2),
-                    Gtxn[0].type_enum() == TxnType.Payment,
+                    Txn.fee() >= Global.min_balance() + Global.min_txn_fee(),
                     App.globalGet(self.Vars.token_id_key) == Txn.assets[0],
                     requested_amount <= old_token_amount
                 )

@@ -131,13 +131,7 @@ def setup_bidding_app(
         # min txn fee for opt into asset
         + 1_000
     )
-
-    fund_app_txn = transaction.PaymentTxn(
-        sender=funder.get_address(),
-        receiver=app_address,
-        amt=funding_amount,
-        sp=params,
-    )
+    params.fee = funding_amount + 1_000
 
     setup_txn = transaction.ApplicationCallTxn(
         sender=funder.get_address(),
@@ -148,14 +142,9 @@ def setup_bidding_app(
         sp=params,
     )
 
-    transaction.assign_group_id([fund_app_txn, setup_txn])
-
-    signed_fund_app_txn = fund_app_txn.sign(funder.get_private_key())
     signed_setup_txn = setup_txn.sign(funder.get_private_key())
-
-    client.send_transactions([signed_fund_app_txn, signed_setup_txn])
-
-    wait_for_confirmation(client, signed_fund_app_txn.get_txid())
+    client.send_transaction(signed_setup_txn)
+    wait_for_confirmation(client, signed_setup_txn.get_txid())
     
     
 def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, bid_amount: int, bid_price: int, bid_index: str) -> str: 
@@ -221,10 +210,11 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
     pay_txn = transaction.PaymentTxn(
         sender=bidder.get_address(),
         receiver=app_address,
-        amt=bid_price + 4_000, #1_000 is for asset txn, 3_000 is for split payment txn, this can be used as txn fee when canceling
+        amt=bid_price, 
         sp=suggested_params,
     )
 
+    suggested_params.fee = 4_000 + 1_000 #4000 is for inner txns(1_000 is for asset txn, 3_000 is for split payment txn, this can be used as txn fee when canceling)
     app_call_txn = transaction.ApplicationCallTxn(
         sender=bidder.get_address(),
         index=app_id,

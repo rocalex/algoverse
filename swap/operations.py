@@ -262,48 +262,6 @@ def place_swap(client: AlgodClient, app_id: int, offer: Account, offering_token_
     client.send_transactions(signed_txns)
     wait_for_confirmation(client, app_call_txn.get_txid())
     
-    # if len(tokens) == 2 :
-    #     tokens.append(offering_token_id)
-        
-    # funding_amount = (
-    #     # min asset txn fee to return back old asset
-    #     + 1_000
-    # )        
-    # fund_app_txn = transaction.PaymentTxn(
-    #     sender=offer.get_address(),
-    #     receiver=app_address,   
-    #     amt=funding_amount,
-    #     sp=suggested_params,
-    # )
-    
-    # token_txn = transaction.AssetTransferTxn(
-    #     sender=offer.get_address(),
-    #     receiver=app_address,
-    #     index=offering_token_id,
-    #     amt=offering_token_amount,
-    #     sp=suggested_params,
-    # )
-    # print(f"token_txn: {token_txn}")
-    
-    # app_call_txn = transaction.ApplicationCallTxn(
-    #     sender=offer.get_address(),
-    #     index=app_id,
-    #     on_complete=transaction.OnComplete.NoOpOC,
-    #     app_args=[b"swap", accepting_token_amount.to_bytes(8, "big")],
-    #     accounts=[n_address],
-    #     foreign_assets=tokens,
-    #     sp=suggested_params,
-    # )
-    
-    # transaction.assign_group_id([fund_app_txn, token_txn, app_call_txn])
-    
-    # signed_fund_txn = fund_app_txn.sign(offer.get_private_key())
-    # signed_token_txn = token_txn.sign(offer.get_private_key())
-    # signed_app_call_txn = app_call_txn.sign(offer.get_private_key())
-    
-    # client.send_transactions([signed_fund_txn, signed_token_txn, signed_app_call_txn])
-    # wait_for_confirmation(client, app_call_txn.get_txid())
-    
     return n_address
     
     

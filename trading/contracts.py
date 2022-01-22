@@ -190,11 +190,7 @@ def approval_program():
         # we'll use to make sure the contract has been set up
         Assert(
             And(
-                # payment to opt into asset
-                Gtxn[on_setup_txn_index].type_enum() == TxnType.Payment,
-                Gtxn[on_setup_txn_index].sender() == Txn.sender(),
-                Gtxn[on_setup_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_setup_txn_index].amount() >= Global.min_txn_fee() + Int(235500),
+                Txn.fee() >= Int(2) * Global.min_txn_fee() + Int(235500),
                 
                 Txn.assets.length() == Int(1),
                 Txn.assets[0] > Int(0),
@@ -229,15 +225,10 @@ def approval_program():
         Approve(),
     )
     
-    on_cancel_pay_txn_index = Txn.group_index() - Int(1)
     on_cancel = Seq(
         Assert(
             And(
-                # the actual asset transfer is before the app call
-                Gtxn[on_cancel_pay_txn_index].type_enum() == TxnType.Payment,
-                Gtxn[on_cancel_pay_txn_index].sender() == Txn.sender(),
-                Gtxn[on_cancel_pay_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_cancel_pay_txn_index].amount() == Int(2000),
+                Txn.fee() >= Int(3) * Global.min_txn_fee(),
                 
                 Txn.accounts.length() == Int(1),
                 is_open(Txn.sender(), Txn.accounts[1]),

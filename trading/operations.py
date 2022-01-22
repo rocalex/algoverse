@@ -85,6 +85,9 @@ def create_trading_app(
     initial_funding_amount = (
         # min account balance
         100_000
+        + 100_000
+        + 135_500
+        + 1_000
     )
     
     initial_fund_app_txn = transaction.PaymentTxn(
@@ -122,7 +125,6 @@ def setup_trading_app(
         token_id: The NFT ID.
     """
     app_address = get_application_address(app_id)
-
     params = client.suggested_params()
 
     funding_amount = (
@@ -134,13 +136,7 @@ def setup_trading_app(
         + 1_000
     )
 
-    fund_app_txn = transaction.PaymentTxn(
-        sender=funder.get_address(),
-        receiver=app_address,
-        amt=funding_amount,
-        sp=params,
-    )
-
+    params.fee = funding_amount + 1_000
     setup_txn = transaction.ApplicationCallTxn(
         sender=funder.get_address(),
         index=app_id,
@@ -150,14 +146,9 @@ def setup_trading_app(
         sp=params,
     )
 
-    transaction.assign_group_id([fund_app_txn, setup_txn])
-
-    signed_fund_app_txn = fund_app_txn.sign(funder.get_private_key())
     signed_setup_txn = setup_txn.sign(funder.get_private_key())
-
-    client.send_transactions([signed_fund_app_txn, signed_setup_txn])
-
-    wait_for_confirmation(client, signed_fund_app_txn.get_txid())
+    client.send_transactions(signed_setup_txn)        
+    wait_for_confirmation(client, signed_setup_txn.get_txid())
     
     
 def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int, token_amount: int, price: int, trading_index: str) -> None:
@@ -264,17 +255,9 @@ def cancel_trade(client: AlgodClient, app_id: int, seller: Account, trading_inde
     token_id = seller_app_local_state[b"TK_ID"]
     suggested_params = client.suggested_params()
     
-    app_address = get_application_address(app_id)
     funding_amount = 2_000
-
-    # this is needed for returning asset, cause application will pay
-    cancel_pay_txn = transaction.PaymentTxn(
-        sender=seller.get_address(),
-        receiver=app_address,
-        amt=funding_amount,
-        sp=suggested_params,
-    )
-    
+    suggested_params.fee = funding_amount + 1_000
+        
     app_call_txn = transaction.ApplicationCallTxn(
         sender=seller.get_address(),
         index=app_id,
@@ -285,12 +268,8 @@ def cancel_trade(client: AlgodClient, app_id: int, seller: Account, trading_inde
         sp=suggested_params,
     )
     
-    transaction.assign_group_id([cancel_pay_txn, app_call_txn])
-
-    signed_cancel_pay_txn = cancel_pay_txn.sign(seller.get_private_key())
     signed_app_call_txn = app_call_txn.sign(seller.get_private_key())
-    client.send_transactions([signed_cancel_pay_txn, signed_app_call_txn])
-    
+    client.send_transaction(signed_app_call_txn)
     wait_for_confirmation(client, app_call_txn.get_txid())    
     
     # #do we need this store app opt out? cause the seller might wants to trade again later ?

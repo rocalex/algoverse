@@ -75,9 +75,8 @@ def create_auction_app(
     app_id = response.application_index
     initial_funding_amount = (
         # min account balance
-        100_000
-        # min balance for the first option
-        + 100_000
+        100_000 + 
+        100_000 # for the first optin
     )
     
     initial_fund_app_txn = transaction.PaymentTxn(
@@ -148,6 +147,13 @@ def setup_auction_app(
     )
     sp.fee = funding_amount + 2 * 1_000
 
+    # fund_app_txn = transaction.PaymentTxn(
+    #     sender=seller.get_address(),
+    #     receiver=app_address,
+    #     amt=funding_amount,
+    #     sp=sp,
+    # )
+
     app_args = [
         b"setup",
         start_time.to_bytes(8, "big"),
@@ -176,10 +182,9 @@ def setup_auction_app(
     )
     
     transaction.assign_group_id([setup_txn, fund_token_txn])
-    
+    #signed_fund_app_txn = fund_app_txn.sign(seller.get_private_key())
     signed_setup_txn = setup_txn.sign(seller.get_private_key())
     signed_fund_token_txn = fund_token_txn.sign(seller.get_private_key())
-    
     client.send_transactions([signed_setup_txn, signed_fund_token_txn])
     
     wait_for_confirmation(client, signed_setup_txn.get_txid())

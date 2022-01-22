@@ -183,17 +183,13 @@ def approval_program():
         Approve(),
     )
     
-    on_setup_txn_index = Txn.group_index() - Int(1)
     on_setup = Seq(
         # opt into NFT asset -- because you can't opt in if you're already opted in, this is what
         # we'll use to make sure the contract has been set up
         Assert(
             And(
                 # payment to opt into asset
-                Gtxn[on_setup_txn_index].type_enum() == TxnType.Payment,
-                Gtxn[on_setup_txn_index].sender() == Txn.sender(),
-                Gtxn[on_setup_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_setup_txn_index].amount() >= Global.min_txn_fee() + Int(235500),
+                Txn.fee() >= 2 * Global.min_txn_fee() + Int(135500) + Global.min_balance(),
                 
                 Txn.assets.length() == Int(1),
                 Txn.assets[0] > Int(0),
@@ -211,19 +207,25 @@ def approval_program():
                 Gtxn[on_bid_txn_index].type_enum() == TxnType.Payment,
                 Gtxn[on_bid_txn_index].sender() == Txn.sender(),
                 Gtxn[on_bid_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_bid_txn_index].amount() > Int(4) * Global.min_txn_fee(),
+                Gtxn[on_bid_txn_index].amount() > Int(0),
                 Txn.application_args.length() == Int(2),
+                
                 # asset amount
                 Btoi(Txn.application_args[1]) > Int(0),
+                
                 # token id
                 Txn.assets.length() > Int(0),
                 Txn.assets[0] > Int(0),
+                
                 # rekeyed address
                 Txn.accounts.length() == Int(1),
+                
+                # for the future accept txns
+                Txn.fee() >= 5 * Global.min_txn_fee()
             )
         ),
         handle_bid(Txn.sender(), Txn.accounts[1], Txn.assets[0], 
-                   Btoi(Txn.application_args[1]), Gtxn[on_bid_txn_index].amount() - Int(4) * Global.min_txn_fee()),
+                   Btoi(Txn.application_args[1]), Gtxn[on_bid_txn_index].amount()),
         Approve(),
     )
     
@@ -286,12 +288,28 @@ def approval_program():
         [on_call_method == Bytes("cancel"), on_cancel],
         [on_call_method == Bytes("accept"), on_accept],
     )
+    
+    @Subroutine(TealType.none)
+    def closeAccountTo(account: Expr) -> Expr:
+        return If(Balance(Global.current_application_address()) != Int(0)).Then(
+            Seq(
+                InnerTxnBuilder.Begin(),
+                InnerTxnBuilder.SetFields(
+                    {
+                        TxnField.type_enum: TxnType.Payment,
+                        TxnField.close_remainder_to: account,
+                    }
+                ),
+                InnerTxnBuilder.Submit(),
+            )
+        )
 
     on_delete = Seq(
         # Assert(
         #     Txn.sender() == Global.creator_address(),
         #     Balance(Global.current_application_address()) == Global.min_txn_fee(),
         # ),
+        closeAccountTo(Global.creator_address()),
         Approve(),
     )
     

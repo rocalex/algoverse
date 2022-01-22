@@ -158,7 +158,7 @@ def approval_program():
     on_setup = Seq(
         Assert(
             And(
-                Txn.fee() >= Int(4) * Global.min_txn_fee() + Global.min_balance(),
+                Txn.fee() >= Global.min_balance() + Int(4) * Global.min_txn_fee(),
                 
                 Gtxn[on_setup_asset_txn_index].type_enum() == TxnType.AssetTransfer,
                 Gtxn[on_setup_asset_txn_index].asset_receiver() == Global.current_application_address(),

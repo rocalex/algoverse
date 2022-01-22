@@ -34,6 +34,7 @@ class StakingPool:
 
         return approval, clear_state
     
+    
     def create_app(self, token_app_id: int):
         approval, clear = self.get_contracts()
         
@@ -62,18 +63,27 @@ class StakingPool:
         print(f"App ID: {self.app_id}")
         print(f"App address: {get_app_address(self.app_id)}")
         
+        funding_amount = (
+            # account min balance
+            100_000
+            # optin asset
+            + 100_000
+            # optin txn
+            + 1_000
+            # for the first withdraw
+            + 100_000
+        )
         txn = transaction.PaymentTxn(
             sender=self.creator.get_address(),
             sp=self.algod.suggested_params(),
             receiver=get_app_address(self.app_id),
-            amt=201_000,  # min balance of the application
+            amt=funding_amount,  # min balance of the application
         )
         
         signed_txn = txn.sign(self.creator.get_private_key())
-        
-        self.algod.send_transaction(signed_txn)
-        
+        self.algod.send_transaction(signed_txn)        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
         
     def setup_app(self):
         txn = transaction.ApplicationCallTxn(
@@ -85,11 +95,10 @@ class StakingPool:
             on_complete=transaction.OnComplete.NoOpOC,
         )
         
-        signed_txn = txn.sign(self.creator.get_private_key())
-        
-        self.algod.send_transaction(signed_txn)
-        
+        signed_txn = txn.sign(self.creator.get_private_key())        
+        self.algod.send_transaction(signed_txn)        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
         
     def set_timelock(self):
         txn = transaction.ApplicationCallTxn(
@@ -100,11 +109,10 @@ class StakingPool:
             on_complete=transaction.OnComplete.NoOpOC,
         )
         
-        signed_txn = txn.sign(self.creator.get_private_key())
-        
-        self.algod.send_transaction(signed_txn)
-        
+        signed_txn = txn.sign(self.creator.get_private_key())        
+        self.algod.send_transaction(signed_txn)        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
         
     def delete_app(self):
         txn = transaction.ApplicationDeleteTxn(
@@ -113,11 +121,10 @@ class StakingPool:
             index=self.app_id
         )
         
-        signed_txn = txn.sign(self.creator.get_private_key())
-        
-        self.algod.send_transaction(signed_txn)
-        
+        signed_txn = txn.sign(self.creator.get_private_key())        
+        self.algod.send_transaction(signed_txn)        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
+        
         
     def is_opted_in(self, user_address):
         account_info = self.algod.account_info(user_address)  
@@ -126,15 +133,16 @@ class StakingPool:
                 return True
         return False
     
+    
     def optin_app(self, sender: Account):
         txn = transaction.ApplicationOptInTxn(
             sender=sender.get_address(),
             sp=self.algod.suggested_params(),
             index=self.app_id
         )
-        signed_txn = txn.sign(sender.get_private_key())
-        self.algod.send_transaction(signed_txn)
         
+        signed_txn = txn.sign(sender.get_private_key())
+        self.algod.send_transaction(signed_txn)        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
     def optout_app(self, sender: Account):
@@ -143,9 +151,9 @@ class StakingPool:
             sp=self.algod.suggested_params(),
             index=self.app_id
         )
-        signed_txn = txn.sign(sender.get_private_key())
-        self.algod.send_transaction(signed_txn)
         
+        signed_txn = txn.sign(sender.get_private_key())
+        self.algod.send_transaction(signed_txn)        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
     def stake_token(self, sender: Account, amount: int):
@@ -185,17 +193,14 @@ class StakingPool:
         tx_id = self.algod.send_transactions([signed_transfer_txn, signed_transfer_call_txn, signed_call_txn])
         
         wait_for_confirmation(self.algod, tx_id)
+        
     
     def withdraw_token(self, sender: Account, amount: int):
-        payment_txn = transaction.PaymentTxn(
-            sender=sender.get_address(),
-            sp=self.algod.suggested_params(),
-            receiver=get_app_address(self.app_id),
-            amt=100_000
-        )
+        sp = self.algod.suggested_params()
+        sp.fee = 100_1000 + 1_000
         call_txn = transaction.ApplicationCallTxn(
             sender=sender.get_address(),
-            sp=self.algod.suggested_params(),
+            sp=sp,
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
             app_args=[
@@ -204,13 +209,12 @@ class StakingPool:
             ],
             foreign_assets=[self.token_id]
         )
-        transaction.assign_group_id([payment_txn, call_txn])
         
-        signed_payment_txn = payment_txn.sign(sender.get_private_key())
         signed_call_txn = call_txn.sign(sender.get_private_key())
-        tx_id = self.algod.send_transactions([signed_payment_txn, signed_call_txn])
+        tx_id = self.algod.send_transaction(signed_call_txn)
         
         wait_for_confirmation(self.algod, tx_id)
+        
     
     def claim_rewards(self, sender: Account):
         call_txn = transaction.ApplicationCallTxn(
