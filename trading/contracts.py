@@ -184,13 +184,12 @@ def approval_program():
         Approve(),
     )
 
-    on_setup_txn_index = Txn.group_index() - Int(1)
     on_setup = Seq(
         # opt into NFT asset -- because you can't opt in if you're already opted in, this is what
         # we'll use to make sure the contract has been set up
         Assert(
             And(
-                Txn.fee() >= Int(2) * Global.min_txn_fee() + Int(235500),
+                Txn.fee() >= Int(2) * Global.min_txn_fee() + Global.min_balance(),
                 
                 Txn.assets.length() == Int(1),
                 Txn.assets[0] > Int(0),
@@ -200,13 +199,12 @@ def approval_program():
         Approve(),
     )
 
-    on_trade_txn_index = Txn.group_index() - Int(1)
     on_trade = Seq(
         Assert(
             And(
                 # the actual asset transfer is before the app call
-                Gtxn[on_trade_txn_index].type_enum() == TxnType.AssetTransfer,
-                Gtxn[on_trade_txn_index].asset_receiver() == Global.current_application_address(),
+                Gtxn[0].type_enum() == TxnType.AssetTransfer,
+                Gtxn[0].asset_receiver() == Global.current_application_address(),
                 
                 # price
                 Txn.application_args.length() == Int(2),
@@ -214,21 +212,30 @@ def approval_program():
                 
                 # token ids, may lenght can be 2, include old token_id
                 Txn.assets.length() > Int(0), 
-                Txn.assets[0] > Int(0),
+                Or(
+                    And(
+                        Txn.assets.length() == Int(1),
+                        Gtxn[0].fee() >= Int(2) * Global.min_txn_fee()
+                    ),
+                    And(
+                        Txn.assets.length() == Int(2),
+                        Gtxn[0].fee() >= Int(3) * Global.min_txn_fee()
+                    )
+                ),
                 
                 # rekeyed address
                 Txn.accounts.length() == Int(1),
             )
         ),
         handle_trading(Txn.sender(), Txn.accounts[1], Txn.assets[0], 
-                       Gtxn[on_trade_txn_index].asset_amount(), Btoi(Txn.application_args[1])),
+                       Gtxn[0].asset_amount(), Btoi(Txn.application_args[1])),
         Approve(),
     )
     
     on_cancel = Seq(
         Assert(
             And(
-                Txn.fee() >= Int(3) * Global.min_txn_fee(),
+                Txn.fee() >= Int(2) * Global.min_txn_fee(),
                 
                 Txn.accounts.length() == Int(1),
                 is_open(Txn.sender(), Txn.accounts[1]),

@@ -85,8 +85,9 @@ def create_trading_app(
     initial_funding_amount = (
         # min account balance
         100_000
+        # for optin asset
         + 100_000
-        + 135_500
+        # optin asset fee
         + 1_000
     )
     
@@ -124,19 +125,16 @@ def setup_trading_app(
         funder: The account providing the funding for the escrow account.
         token_id: The NFT ID.
     """
-    app_address = get_application_address(app_id)
+    
     params = client.suggested_params()
-
-    funding_amount = (
-        # min account balance
+    optin_asset_fee = (
+        # min optin asset fee
         100_000
-        # balance to opt into asset
-        + 135_500
         # min txn fee
         + 1_000
     )
-
-    params.fee = funding_amount + 1_000
+    params.fee = optin_asset_fee + 1_000
+    
     setup_txn = transaction.ApplicationCallTxn(
         sender=funder.get_address(),
         index=app_id,
@@ -147,7 +145,7 @@ def setup_trading_app(
     )
 
     signed_setup_txn = setup_txn.sign(funder.get_private_key())
-    client.send_transactions(signed_setup_txn)        
+    client.send_transaction(signed_setup_txn)        
     wait_for_confirmation(client, signed_setup_txn.get_txid())
     
     
@@ -177,6 +175,7 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
     if is_opted_in_asset(client, token_id, app_address) == False:
         setup_trading_app(client=client, app_id=app_id, funder=seller, token_id=token_id)
     
+    suggested_params.fee = 2 * 1_000
     tokens = [token_id]
     n_address = trading_index
     # if bid_index is empty, find a usable(if the bid app local state's token id is 0) rekeyed address used in the past, 
@@ -189,6 +188,10 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
                 print(f"local state of {rekeyed_address} :", state)
                 if b"TK_ID" in state and state[b"TK_ID"] == 0:
                     unused_rekeyed_address = rekeyed_address
+                    
+                if state[b"TK_ID"] > 0 and state[b"TA"] > 0:
+                    suggested_params.fee = 3 * 1_000 # add inner returning asset txn fee
+                    
             else:
                 # might have rekeyed address already but not optin app, we can use it
                 unused_rekeyed_address = rekeyed_address
@@ -206,8 +209,9 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
             set_rekeyed_address(seller.get_address(), n_address, 1)
     else:
         state = get_app_local_state(client, app_id, trading_index)
-        if b"TK_ID" in state and state[b"TK_ID"] > 0:
+        if b"TK_ID" in state and state[b"TK_ID"] > 0 and state[b"TA"] > 0:
             tokens.append(state[b"TK_ID"])
+            suggested_params.fee = 3 * 1_000 # add inner returning asset txn fee    
     
     token_txn = transaction.AssetTransferTxn(
         sender=seller.get_address(),
@@ -218,6 +222,7 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
     )
     print(f"token_txn: {token_txn}")
 
+    suggested_params.fee = 0
     app_call_txn = transaction.ApplicationCallTxn(
         sender=seller.get_address(),
         index=app_id,
@@ -234,7 +239,6 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
     signed_app_call_txn = app_call_txn.sign(seller.get_private_key())
 
     client.send_transactions([signed_token_txn, signed_app_call_txn])
-
     wait_for_confirmation(client, app_call_txn.get_txid())
     
     return n_address
@@ -254,9 +258,7 @@ def cancel_trade(client: AlgodClient, app_id: int, seller: Account, trading_inde
     seller_app_local_state = get_app_local_state(client, app_id, trading_index)
     token_id = seller_app_local_state[b"TK_ID"]
     suggested_params = client.suggested_params()
-    
-    funding_amount = 2_000
-    suggested_params.fee = funding_amount + 1_000
+    suggested_params.fee = 2_000
         
     app_call_txn = transaction.ApplicationCallTxn(
         sender=seller.get_address(),
@@ -322,7 +324,7 @@ def accept_trade(client: AlgodClient, app_id: int, buyer: Account, seller: str, 
     pay_txn = transaction.PaymentTxn(
         sender=buyer.get_address(),
         receiver=app_address,
-        amt=trading_price + 4_000, #1_000 is for asset txn, 3_000 is for split payment txn
+        amt=trading_price + 4_000, # 1_000 is for asset txn, 3_000 is for split payment txn
         sp=suggested_params,
     )
     
