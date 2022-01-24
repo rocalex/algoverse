@@ -156,16 +156,9 @@ class StakingPool:
         self.algod.send_transaction(signed_txn)        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
-    def stake_token(self, sender: Account, amount: int):
+    def stake_token(self, sender: Account):
         globalState = get_app_global_state(self.algod, self.app_id)
         
-        transfer_txn = transaction.AssetTransferTxn(
-            sender=sender.get_address(),
-            sp=self.algod.suggested_params(),
-            receiver=get_app_address(self.app_id),
-            index=self.token_id,
-            amt=amount,
-        )
         transfer_call_txn = transaction.ApplicationCallTxn(
             sender=sender.get_address(),
             sp=self.algod.suggested_params(),
@@ -185,12 +178,11 @@ class StakingPool:
             ],
             accounts=[get_app_address(globalState[b"TA"])]
         )
-        transaction.assign_group_id([transfer_txn, transfer_call_txn, call_txn])
+        transaction.assign_group_id([transfer_call_txn, call_txn])
         
-        signed_transfer_txn = transfer_txn.sign(sender.get_private_key())
         signed_transfer_call_txn = transfer_call_txn.sign(sender.get_private_key())
         signed_call_txn = call_txn.sign(sender.get_private_key())
-        tx_id = self.algod.send_transactions([signed_transfer_txn, signed_transfer_call_txn, signed_call_txn])
+        tx_id = self.algod.send_transactions([signed_transfer_call_txn, signed_call_txn])
         
         wait_for_confirmation(self.algod, tx_id)
         

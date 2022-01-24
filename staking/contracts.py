@@ -93,28 +93,27 @@ class StakingContract:
         return Seq(
             Assert(
                 And(
-                    Global.group_size() == Int(3),
+                    Global.group_size() == Int(2),
                     
-                    Gtxn[0].type_enum() == TxnType.AssetTransfer,
-                    Gtxn[0].xfer_asset() == App.globalGet(self.Vars.token_id_key),
-                    Gtxn[0].asset_receiver() == Global.current_application_address(),
-                    
-                    Gtxn[1].type_enum() == TxnType.ApplicationCall,
-                    Gtxn[1].application_args[0] == Bytes("transfer"),
-                    Gtxn[1].application_id() == App.globalGet(self.Vars.token_app_id_key),
-                    Gtxn[1].sender() == Txn.sender(),
+                    Gtxn[0].type_enum() == TxnType.ApplicationCall,
+                    Gtxn[0].application_args[0] == Bytes("transfer"),
+                    Gtxn[0].application_id() == App.globalGet(self.Vars.token_app_id_key),
+                    Gtxn[0].sender() == Txn.sender(),
                     
                     Txn.accounts.length() == Int(1),
                     Txn.accounts[1] == StakingContract.get_app_address(App.globalGet(self.Vars.token_app_id_key)),
+                    
+                    Txn.application_args.length() == 2,
+                    Txn.application_args[1] > Int(0),
                 )
             ),
             
             # burn 0.2%
-            App.localPut(Txn.sender(), self.Vars.token_amount_key, self.calculate_fraction(Gtxn[0].asset_amount(), Int(9980)) + old_token_amount),
-            App.localPut(Txn.sender(), self.Vars.week_stake_amount, App.localGet(Txn.sender(), self.Vars.week_stake_amount) + self.calculate_fraction(Gtxn[0].asset_amount(), Int(9980))),
+            App.localPut(Txn.sender(), self.Vars.token_amount_key, self.calculate_fraction(Txn.application_args[1], Int(9980)) + old_token_amount),
+            App.localPut(Txn.sender(), self.Vars.week_stake_amount, App.localGet(Txn.sender(), self.Vars.week_stake_amount) + self.calculate_fraction(Txn.application_args[1], Int(9980))),
             
             # transfer burn asset 
-            self.send_tokens(Txn.accounts[1], self.calculate_fraction(Gtxn[0].asset_amount(), Int(20))),
+            self.send_tokens(Txn.accounts[1], self.calculate_fraction(Txn.application_args[1], Int(20))),
             
             Approve()
         )
