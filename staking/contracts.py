@@ -90,6 +90,7 @@ class StakingContract:
         
     def on_stake(self):
         old_token_amount = App.localGet(Txn.sender(), self.Vars.token_amount_key)
+        requested_amount = Btoi(Txn.application_args[1])
         return Seq(
             Assert(
                 And(
@@ -104,16 +105,12 @@ class StakingContract:
                     Txn.accounts[1] == StakingContract.get_app_address(App.globalGet(self.Vars.token_app_id_key)),
                     
                     Txn.application_args.length() == 2,
-                    Txn.application_args[1] > Int(0),
+                    requested_amount > Int(0),
                 )
             ),
             
-            # burn 0.2%
-            App.localPut(Txn.sender(), self.Vars.token_amount_key, self.calculate_fraction(Txn.application_args[1], Int(9980)) + old_token_amount),
-            App.localPut(Txn.sender(), self.Vars.week_stake_amount, App.localGet(Txn.sender(), self.Vars.week_stake_amount) + self.calculate_fraction(Txn.application_args[1], Int(9980))),
-            
-            # transfer burn asset 
-            self.send_tokens(Txn.accounts[1], self.calculate_fraction(Txn.application_args[1], Int(20))),
+            App.localPut(Txn.sender(), self.Vars.token_amount_key, self.calculate_fraction(requested_amount, Int(9980)) + old_token_amount),
+            App.localPut(Txn.sender(), self.Vars.week_stake_amount, App.localGet(Txn.sender(), self.Vars.week_stake_amount) + self.calculate_fraction(requested_amount, Int(9980))),
             
             Approve()
         )
@@ -129,15 +126,6 @@ class StakingContract:
                     requested_amount <= old_token_amount
                 )
             ),
-            
-            InnerTxnBuilder.Begin(),
-            InnerTxnBuilder.SetFields({
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: Txn.assets[0],
-                TxnField.asset_receiver: Txn.sender(),
-                TxnField.asset_amount: requested_amount
-            }),
-            InnerTxnBuilder.Submit(),
             
             App.localPut(Txn.sender(), self.Vars.week_withdraw_amount, App.localGet(Txn.sender(), self.Vars.week_withdraw_amount) + requested_amount),
             App.localPut(Txn.sender(), self.Vars.token_amount_key, old_token_amount - requested_amount),
