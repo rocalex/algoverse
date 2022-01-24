@@ -101,10 +101,10 @@ class StakingContract:
                     Gtxn[0].application_id() == App.globalGet(self.Vars.token_app_id_key),
                     Gtxn[0].sender() == Txn.sender(),
                     
-                    Txn.accounts.length() == Int(1),
-                    Txn.accounts[1] == StakingContract.get_app_address(App.globalGet(self.Vars.token_app_id_key)),
+                    # fee includes two inner send txns from transfer call of token app
+                    Gtxn[0].fee() + Txn.fee() >= Int(4) * Global.min_txn_fee(),
                     
-                    Txn.application_args.length() == 2,
+                    Txn.application_args.length() == Int(2),
                     requested_amount > Int(0),
                 )
             ),
@@ -121,14 +121,25 @@ class StakingContract:
         return Seq(
             Assert(
                 And(
-                    Txn.fee() >= Global.min_balance() + Global.min_txn_fee(),
-                    App.globalGet(self.Vars.token_id_key) == Txn.assets[0],
-                    requested_amount <= old_token_amount
+                    Global.group_size() == Int(2),
+                    
+                    Gtxn[0].type_enum() == TxnType.ApplicationCall,
+                    Gtxn[0].application_args[0] == Bytes("transfer"),
+                    Gtxn[0].application_id() == App.globalGet(self.Vars.token_app_id_key),
+                    Gtxn[0].sender() == Txn.sender(),
+                    
+                    # fee includes two inner send txns from transfer call of token app
+                    Gtxn[0].fee() + Txn.fee() >= Int(4) * Global.min_txn_fee(),
+                    
+                    Txn.application_args.length() == Int(2),
+                    requested_amount > Int(0),
+                    requested_amount <= old_token_amount,
                 )
             ),
             
             App.localPut(Txn.sender(), self.Vars.week_withdraw_amount, App.localGet(Txn.sender(), self.Vars.week_withdraw_amount) + requested_amount),
             App.localPut(Txn.sender(), self.Vars.token_amount_key, old_token_amount - requested_amount),
+            
             Approve()
         )
         

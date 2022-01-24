@@ -156,27 +156,31 @@ class StakingPool:
         self.algod.send_transaction(signed_txn)        
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
-    def stake_token(self, sender: Account):
+    def stake_token(self, sender: Account, amount: int):
         globalState = get_app_global_state(self.algod, self.app_id)
+        sp = self.algod.suggested_params()
         
+        sp.fee = 3 * 1_000
         transfer_call_txn = transaction.ApplicationCallTxn(
             sender=sender.get_address(),
-            sp=self.algod.suggested_params(),
+            sp=sp,
             index=globalState[b"TA"],
             on_complete=transaction.OnComplete.NoOpOC,
             app_args=[
                 b"transfer",
+                amount.to_bytes(8, 'big'),
             ],
         )
+        sp.fee = 1_000
         call_txn = transaction.ApplicationCallTxn(
             sender=sender.get_address(),
-            sp=self.algod.suggested_params(),
+            sp=sp,
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
             app_args=[
                 b"stake",
+                amount.to_bytes(8, 'big'),
             ],
-            accounts=[get_app_address(globalState[b"TA"])]
         )
         transaction.assign_group_id([transfer_call_txn, call_txn])
         
@@ -189,7 +193,20 @@ class StakingPool:
     
     def withdraw_token(self, sender: Account, amount: int):
         sp = self.algod.suggested_params()
-        sp.fee = 100_1000 + 1_000
+        globalState = get_app_global_state(self.algod, self.app_id)
+        
+        sp.fee = 3 * 1_000
+        transfer_call_txn = transaction.ApplicationCallTxn(
+            sender=sender.get_address(),
+            sp=sp,
+            index=globalState[b"TA"],
+            on_complete=transaction.OnComplete.NoOpOC,
+            app_args=[
+                b"transfer",
+                amount.to_bytes(8, 'big'),
+            ],
+        )
+        sp.fee = 1_000
         call_txn = transaction.ApplicationCallTxn(
             sender=sender.get_address(),
             sp=sp,
@@ -202,8 +219,11 @@ class StakingPool:
             foreign_assets=[self.token_id]
         )
         
+        transaction.assign_group_id([transfer_call_txn, call_txn])
+        
+        signed_transfer_call_txn = transfer_call_txn.sign(sender.get_private_key())
         signed_call_txn = call_txn.sign(sender.get_private_key())
-        tx_id = self.algod.send_transaction(signed_call_txn)
+        tx_id = self.algod.send_transactions([signed_transfer_call_txn, signed_call_txn])
         
         wait_for_confirmation(self.algod, tx_id)
         
