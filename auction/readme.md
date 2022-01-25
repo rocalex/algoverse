@@ -1,6 +1,6 @@
 # Auction Contract
 
-Auction contract have following 4 methods: 
+Auction contract has following 4 methods: 
 
 [on_create()](#on_create)
 
