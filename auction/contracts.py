@@ -150,6 +150,7 @@ def approval_program():
         Approve(),
     )
 
+    on_setup_pay_txn_index = Txn.group_index() - Int(1)
     on_setup_asset_txn_index = Txn.group_index() + Int(1)
     start_time = Btoi(Txn.application_args[1])
     end_time = Btoi(Txn.application_args[2])
@@ -158,7 +159,11 @@ def approval_program():
     on_setup = Seq(
         Assert(
             And(
-                Txn.fee() >= Int(4) * Global.min_txn_fee() + Global.min_balance(),
+                # the actual bid payment is before the app call
+                Gtxn[on_setup_pay_txn_index].type_enum() == TxnType.Payment,
+                Gtxn[on_setup_pay_txn_index].sender() == Txn.sender(),
+                Gtxn[on_setup_pay_txn_index].receiver() == Global.current_application_address(),
+                Gtxn[on_setup_pay_txn_index].amount() >= Global.min_balance() + Global.min_txn_fee(),
                 
                 Gtxn[on_setup_asset_txn_index].type_enum() == TxnType.AssetTransfer,
                 Gtxn[on_setup_asset_txn_index].asset_receiver() == Global.current_application_address(),
@@ -218,7 +223,7 @@ def approval_program():
                 Gtxn[on_bid_txn_index].type_enum() == TxnType.Payment,
                 Gtxn[on_bid_txn_index].sender() == Txn.sender(),
                 Gtxn[on_bid_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_bid_txn_index].amount() >= App.localGet(auction_index, reserve_amount_key) + Int(4) * Global.min_txn_fee(),
+                Gtxn[on_bid_txn_index].amount() >= App.localGet(auction_index, reserve_amount_key) + Int(3) * Global.min_txn_fee(),
             )
         ),
         If(

@@ -76,8 +76,6 @@ def create_auction_app(
     initial_funding_amount = (
         # min account balance
         100_000
-        # min balance for the first option
-        + 100_000
     )
     
     initial_fund_app_txn = transaction.PaymentTxn(
@@ -123,7 +121,7 @@ def setup_auction_app(
             the current leading bid.
 
     Returns:
-        The ID of the newly created auction app.
+        Auction index.
     """
     app_address = get_application_address(app_id)
     sp = client.suggested_params()
@@ -137,16 +135,21 @@ def setup_auction_app(
         optin_app(client, store_app_id, seller)
         
     n_address = get_usable_rekeyed_address(client=client, auther=seller, app_id=app_id)
-        
+    
     funding_amount = (
         # balance for the app to opt into asset
         + 100_000
         # optin asset min txn fee 
         + 1_000
-        # asset back min txn fee 
-        + 1_000
     )
-    sp.fee = funding_amount + 2 * 1_000
+    
+    app_address = get_application_address(app_id)
+    pay_txn = transaction.PaymentTxn(
+        sender=seller.get_address(),
+        receiver=app_address,
+        amt=funding_amount,
+        sp=sp,
+    )
 
     app_args = [
         b"setup",
@@ -166,7 +169,6 @@ def setup_auction_app(
         sp=sp,
     )
     
-    sp.fee = 0
     fund_token_txn = transaction.AssetTransferTxn(
         sender=seller.get_address(),
         receiver=app_address,
@@ -175,12 +177,13 @@ def setup_auction_app(
         sp=sp,
     )
     
-    transaction.assign_group_id([setup_txn, fund_token_txn])
+    transaction.assign_group_id([pay_txn, setup_txn, fund_token_txn])
     
+    signed_pay_txn = pay_txn.sign(seller.get_private_key())
     signed_setup_txn = setup_txn.sign(seller.get_private_key())
     signed_fund_token_txn = fund_token_txn.sign(seller.get_private_key())
     
-    client.send_transactions([signed_setup_txn, signed_fund_token_txn])
+    client.send_transactions([signed_pay_txn, signed_setup_txn, signed_fund_token_txn])
     
     wait_for_confirmation(client, signed_setup_txn.get_txid())
     return n_address
@@ -329,6 +332,7 @@ def close_auction(client: AlgodClient,
         accounts.append(encoding.encode_address(app_global_state[b"TW_ADDR"]))
     print(accounts)
     
+    sp.fee = 2 * 1_000 # include inner txn
     close_txn = transaction.ApplicationCallTxn(
         sender=closer.get_address(),
         index=app_id,
@@ -341,6 +345,7 @@ def close_auction(client: AlgodClient,
     
     if len(accounts) == 4:
         store_app_id = app_global_state[b"SA_ID"]
+        sp.fee = 1_000
         store_app_call_txn = transaction.ApplicationCallTxn(
             sender=closer.get_address(),
             index=store_app_id,
