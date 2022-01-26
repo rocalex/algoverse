@@ -188,8 +188,11 @@ def approval_program():
         # we'll use to make sure the contract has been set up
         Assert(
             And(
-                # payment to opt into asset
-                Txn.fee() >= 2 * Global.min_txn_fee() + Int(135500) + Global.min_balance(),
+                # the payment for optin assest is before the app call
+                Gtxn[0].type_enum() == TxnType.Payment,
+                Gtxn[0].sender() == Txn.sender(),
+                Gtxn[0].receiver() == Global.current_application_address(),
+                Gtxn[0].amount() >= Global.min_balance() + Global.min_txn_fee(),
                 
                 Txn.assets.length() == Int(1),
                 Txn.assets[0] > Int(0),
@@ -208,9 +211,9 @@ def approval_program():
                 Gtxn[on_bid_txn_index].sender() == Txn.sender(),
                 Gtxn[on_bid_txn_index].receiver() == Global.current_application_address(),
                 Gtxn[on_bid_txn_index].amount() > Int(0),
-                Txn.application_args.length() == Int(2),
                 
                 # asset amount
+                Txn.application_args.length() == Int(2),
                 Btoi(Txn.application_args[1]) > Int(0),
                 
                 # token id
@@ -234,6 +237,7 @@ def approval_program():
             And(
                 Txn.accounts.length() == Int(1),
                 is_open(Txn.sender(), Txn.accounts[1]),
+                Txn.fee() >= Int(2) * Global.min_txn_fee(),
             )
         ),
         handle_cancel_bid(Txn.sender(), Txn.accounts[1]),
@@ -307,7 +311,6 @@ def approval_program():
     on_delete = Seq(
         # Assert(
         #     Txn.sender() == Global.creator_address(),
-        #     Balance(Global.current_application_address()) == Global.min_txn_fee(),
         # ),
         closeAccountTo(Global.creator_address()),
         Approve(),

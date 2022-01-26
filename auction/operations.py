@@ -44,7 +44,7 @@ def create_auction_app(
         creator: The account that will create the auction application.
         staking_address: staking app address,
         team_wallet_address: team wallet address,
-        store_app_id: store app id,
+        store_app_id: The store application id, which storing bought and sold amount
 
     Returns:
         The ID of the newly created auction app.

@@ -57,7 +57,6 @@ Group transaction:
   * Bid amount: Should be larger than reserve amount and four min txn fees (This fees will be used while split payment as the inner transaction when succeed auction)
 
 * Application call transaction
-  * App args: Start time, End time, Reserve amount, Min bid increment
   * Accounts: Rekeyed address for local state
 
 ## on_close()

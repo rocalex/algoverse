@@ -1,3 +1,4 @@
+from dis import dis
 from typing import Tuple
 from algosdk.future import transaction
 from algosdk.v2client.algod import AlgodClient
@@ -8,13 +9,6 @@ from .contracts import StoreContract
 
 from utils import fully_compile_contract, get_app_address, wait_for_confirmation
 from account import Account
-
-
-class AppType(Enum):
-    Bid_app = "BA"
-    Trade_app = "TA"
-    Auction_app = "AA"
-    Distribution_app = "DA"
 
 
 class StoringPool:
@@ -75,14 +69,14 @@ class StoringPool:
         self.algod.send_transaction(signed_txn)
         wait_for_confirmation(self.algod, signed_txn.get_txid())
         
-    def set_up(self, type: str, app_id: int):
+    def set_up(self, trade_app_id: int, bid_app_id: int, auction_app_id: int, distribution_app_id: int):
         call_txn = transaction.ApplicationCallTxn(
             sender=self.creator.get_address(),
             sp=self.algod.suggested_params(),
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
-            foreign_apps=[app_id],
-            app_args=[b"setup", type.encode("UTF-8")],
+            foreign_apps=[trade_app_id, bid_app_id, auction_app_id, distribution_app_id],
+            app_args=[b"setup"],
         )
         signed_txn = call_txn.sign(self.creator.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)

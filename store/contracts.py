@@ -34,36 +34,18 @@ class StoreContract:
             Assert(
                 And(
                     Txn.sender() == Global.creator_address(),
-                    Txn.applications.length() == Int(1),
-                    
-                    # app type
-                    Or(
-                        Txn.application_args[1] == Bytes("TA"),
-                        Txn.application_args[1] == Bytes("BA"),
-                        Txn.application_args[1] == Bytes("AA"),
-                        Txn.application_args[1] == Bytes("DA"),
-                    ),
-                    
-                    # app_id
-                    Txn.applications[1] >= Int(0)
+                    Txn.applications.length() == Int(4),
+                    Txn.applications[1] > Int(0),
+                    Txn.applications[2] > Int(0),
+                    Txn.applications[3] > Int(0),
+                    Txn.applications[4] > Int(0)
                 )
             ),
             
-            If (Txn.application_args[1] == Bytes("TA")).Then(
-                App.globalPut(self.Vars.trade_app_id_key, Txn.applications[2]),    
-            ),
-            
-            If (Txn.application_args[1] == Bytes("BA")).Then(
-                App.globalPut(self.Vars.bid_app_id_key, Txn.applications[2]),
-            ),
-            
-            If (Txn.application_args[1] == Bytes("AA")).Then(
-                App.globalPut(self.Vars.auction_app_id_key, Txn.applications[2]),
-            ),
-            
-            If (Txn.application_args[1] == Bytes("DA")).Then(
-                App.globalPut(self.Vars.distribution_app_id_key, Txn.applications[2]),
-            ),
+            App.globalPut(self.Vars.trade_app_id_key, Txn.applications[1]),
+            App.globalPut(self.Vars.bid_app_id_key, Txn.applications[2]),
+            App.globalPut(self.Vars.auction_app_id_key, Txn.applications[3]),
+            App.globalPut(self.Vars.distribution_app_id_key, Txn.applications[4]),
             
             Approve()
         )
@@ -71,25 +53,21 @@ class StoreContract:
     def on_reset(self):
         total_sold_amount = App.globalGet(self.Vars.total_sold_amount_key)
         total_bought_amount = App.globalGet(self.Vars.total_bought_amount_key)
-        i = ScratchVar(TealType.uint64)
         
         return Seq(
             Assert(
                 And(
                     Txn.type_enum() == TxnType.ApplicationCall,
                     Txn.sender() == StoreContract.get_app_address(App.globalGet(self.Vars.distribution_app_id_key)),
-                    
-                    Txn.accounts.length() >= Int(1)
+                    Txn.accounts.length() == Int(1)
                 )
             ),
             
-            For(i.store(Int(1)), i.load() <= Txn.accounts.length(), i.store(i.load() + Int(1))).Do(
-                Seq(
-                    App.globalPut(self.Vars.total_sold_amount_key, total_sold_amount - App.localGet(Txn.accounts[i.load()], self.Vars.sold_amount_key)),
-                    App.localPut(Txn.accounts[i.load()], self.Vars.sold_amount_key, Int(0)),
-                    App.globalPut(self.Vars.total_bought_amount_key, total_bought_amount - App.localGet(Txn.accounts[i.load()], self.Vars.bought_amount_key)),
-                    App.localPut(Txn.accounts[i.load()], self.Vars.bought_amount_key, Int(0)),
-                )
+            Seq(
+                App.globalPut(self.Vars.total_sold_amount_key, total_sold_amount - App.localGet(Txn.accounts[1], self.Vars.sold_amount_key)),
+                App.localPut(Txn.accounts[1], self.Vars.sold_amount_key, Int(0)),
+                App.globalPut(self.Vars.total_bought_amount_key, total_bought_amount - App.localGet(Txn.accounts[1], self.Vars.bought_amount_key)),
+                App.localPut(Txn.accounts[1], self.Vars.bought_amount_key, Int(0)),
             ),
             
             Approve()

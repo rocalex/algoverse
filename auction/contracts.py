@@ -159,7 +159,7 @@ def approval_program():
     on_setup = Seq(
         Assert(
             And(
-                # the actual bid payment is before the app call
+                # the payment for optin assest is before the app call
                 Gtxn[on_setup_pay_txn_index].type_enum() == TxnType.Payment,
                 Gtxn[on_setup_pay_txn_index].sender() == Txn.sender(),
                 Gtxn[on_setup_pay_txn_index].receiver() == Global.current_application_address(),

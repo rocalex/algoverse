@@ -39,14 +39,8 @@ def create_bidding_app(
 
     Args:
         client: An algod client.
-        sender: The account that will create the bidding application.
-        seller: The address of the seller that currently holds the NFT being
-            traded.
-        token_id: The ID of the NFT being traded.
-        price: The price of the bidding. If the bidding ends without
-            a bid that is equal to or greater than this amount, the bidding will
-            fail, meaning the bid amount will be refunded to the lead bidder and
-            the NFT will return to the seller.
+        creator: The account that will create the bidding application.
+        store_app_id: The store application id, which storing bought and sold amount
 
     Returns:
         The ID of the newly created bidding app.
@@ -110,7 +104,7 @@ def setup_bidding_app(
     """Finish setting up an bidding.
 
     This operation funds the app bidding escrow account, opts that account into
-    the NFT, and sends the NFT to the escrow account, all in one atomic
+    the asset, and sends the asset to the escrow account, all in one atomic
     transaction group. The bidding must not have started yet.
 
     The escrow account requires a total of 0.202 Algos for funding. See the code
@@ -120,18 +114,23 @@ def setup_bidding_app(
         client: An algod client.
         app_id: The app ID of the bidding.
         funder: The account providing the funding for the escrow account.
-        token_id: The NFT ID.
+        token_id: The asset ID.
     """
     app_address = get_application_address(app_id)
     params = client.suggested_params()
+    
     funding_amount = (
-        100_000
-        # additional min balance to opt into app
-        + 135_500
+        # opt into asset min balance
+        + 100_000
         # min txn fee for opt into asset
         + 1_000
     )
-    params.fee = funding_amount + 1_000
+    pay_txn = transaction.PaymentTxn(
+        sender=funder.get_address(),
+        receiver=app_address,
+        amt=funding_amount,
+        sp=params,
+    )
 
     setup_txn = transaction.ApplicationCallTxn(
         sender=funder.get_address(),
@@ -142,8 +141,12 @@ def setup_bidding_app(
         sp=params,
     )
 
+    transaction.assign_group_id([pay_txn, setup_txn])
+    
+    signed_pay_txn = pay_txn.sign(funder.get_private_key())
     signed_setup_txn = setup_txn.sign(funder.get_private_key())
-    client.send_transaction(signed_setup_txn)
+    
+    client.send_transactions([signed_pay_txn, signed_setup_txn])
     wait_for_confirmation(client, signed_setup_txn.get_txid())
     
     
@@ -247,15 +250,15 @@ def cancel_bid(client: AlgodClient, app_id: int, bidder: Account, bid_index: str
     if (is_opted_in_app(client, app_id, bid_index) == False): 
         return False
     
-    suggested_params = client.suggested_params()
-    
+    sp = client.suggested_params()
+    sp.fee = 2 * 1_000
     app_call_txn = transaction.ApplicationCallTxn(
         sender=bidder.get_address(),
         index=app_id,
         on_complete=transaction.OnComplete.NoOpOC,
         app_args=[b"cancel"],
         accounts=[bid_index],
-        sp=suggested_params,
+        sp=sp,
     )
 
     signed_app_call_txn = app_call_txn.sign(bidder.get_private_key())
@@ -284,7 +287,7 @@ def accept_bid(client: AlgodClient, app_id: int, seller: Account, bidder: str, b
         bidder: The account address offerring the bid.
     """
     app_address = get_application_address(app_id)
-    suggested_params = client.suggested_params()
+    sp = client.suggested_params()
     app_global_state = get_app_global_state(client, app_id)
     
     if (is_opted_in_app(client, app_id, bid_index) == False): 
@@ -312,7 +315,7 @@ def accept_bid(client: AlgodClient, app_id: int, seller: Account, bidder: str, b
         receiver=app_address,
         index=token_id,
         amt=token_amount,
-        sp=suggested_params,
+        sp=sp,
     )
     
     app_call_txn = transaction.ApplicationCallTxn(
@@ -326,12 +329,12 @@ def accept_bid(client: AlgodClient, app_id: int, seller: Account, bidder: str, b
                   bid_index, 
                   encoding.encode_address(app_global_state[b"SA_ADDR"]), 
                   encoding.encode_address(app_global_state[b"TW_ADDR"])],
-        sp=suggested_params,
+        sp=sp,
     )
     
     store_app_call_txn = transaction.ApplicationCallTxn(
         sender=seller.get_address(),
-        sp=suggested_params,
+        sp=sp,
         index=store_app_id,
         on_complete=transaction.OnComplete.NoOpOC,
         app_args=[b"sell"],
@@ -339,6 +342,7 @@ def accept_bid(client: AlgodClient, app_id: int, seller: Account, bidder: str, b
     )
     
     transaction.assign_group_id([asset_txn, app_call_txn, store_app_call_txn])
+    
     signed_asset_txn = asset_txn.sign(seller.get_private_key())
     signed_app_call_txn = app_call_txn.sign(seller.get_private_key())
     signed_store_app_call_txn = store_app_call_txn.sign(seller.get_private_key())
