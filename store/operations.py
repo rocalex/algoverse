@@ -141,7 +141,7 @@ class StoringPool:
         
     def buy(self, seller: Account, buyer: Account, amount: int):
         call_txn = transaction.ApplicationCallTxn(
-            sender=self.buyer.get_address(),
+            sender=buyer.get_address(),
             sp=self.algod.suggested_params(),
             index=self.app_id,
             on_complete=transaction.OnComplete.NoOpOC,
@@ -165,6 +165,6 @@ class StoringPool:
             ],
             accounts=[buyer.get_address()]
         )
-        signed_txn = call_txn.sign(self.seller.get_private_key())
+        signed_txn = call_txn.sign(seller.get_private_key())
         tx_id = self.algod.send_transaction(signed_txn)
         wait_for_confirmation(self.algod, tx_id)
