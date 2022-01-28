@@ -224,7 +224,7 @@ def approval_program():
                 Txn.accounts.length() == Int(1),
                 
                 # for the future accept txns
-                Txn.fee() >= 5 * Global.min_txn_fee()
+                Txn.fee() >= Int(5) * Global.min_txn_fee()
             )
         ),
         handle_bid(Txn.sender(), Txn.accounts[1], Txn.assets[0], 

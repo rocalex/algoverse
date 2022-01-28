@@ -1,6 +1,6 @@
-# Bid Contract
+# Staking Contract
 
-Bid contract has following 5 methods: 
+Staking contract has following 8 methods: 
 
 [on_create()](#on_create)
 
