@@ -69,43 +69,6 @@ def approval_program():
         Approve()
     )
     
-    # will be used for reset user's sold amount
-    total_sold_amount = App.globalGet(total_sold_amount_key)
-    user_sold_amount = App.localGet(Txn.accounts[1], sold_amount_key)
-    on_set_sold = Seq(
-        Assert(
-            And(
-                Txn.type_enum() == TxnType.ApplicationCall,
-                Txn.sender() == Global.creator_address(),
-                Btoi(Txn.application_args[1]) > Int(0),
-                Txn.accounts.length() == Int(1)
-            )
-        ),
-        
-        App.globalPut(total_sold_amount_key, total_sold_amount - user_sold_amount + Btoi(Txn.application_args[1])),
-        App.localPut(Txn.accounts[1], sold_amount_key, Btoi(Txn.application_args[1])),
-        Approve()
-    )
-    
-    # will be used for reset user's bought amount
-    total_bought_amount = App.globalGet(total_bought_amount_key)
-    user_bought_amount = App.localGet(Txn.accounts[1], bought_amount_key)
-    on_set_bought = Seq(
-        Assert(
-            And(
-                Txn.type_enum() == TxnType.ApplicationCall,
-                Txn.sender() == Global.creator_address(),
-                Txn.application_args.length() == Int(2),
-                Btoi(Txn.application_args[1]) > Int(0),
-                Txn.accounts.length() == Int(1)
-            )
-        ),
-        
-        App.globalPut(total_bought_amount_key, total_bought_amount - user_bought_amount + Btoi(Txn.application_args[1])),
-        App.localPut(Txn.receiver(), bought_amount_key, Btoi(Txn.application_args[1])),
-        Approve()
-    )
-    
     # use for trade contract
     seller_sold_amount = App.localGet(Txn.accounts[1], sold_amount_key)
     buyer_bought_amount = App.localGet(Txn.sender(), bought_amount_key)

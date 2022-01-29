@@ -234,13 +234,9 @@ def approval_program():
             )
         ),
         If (is_open(Txn.sender(), Txn.accounts[1])).Then(
-            If(Not(And(
-                # the fee payment txn is before the app call
-                Gtxn[on_swap_pay_txn_index].type_enum() == TxnType.Payment,
-                Gtxn[on_swap_pay_txn_index].sender() == Txn.sender(),
-                Gtxn[on_swap_pay_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_swap_pay_txn_index].amount() == Int(1000),
-            ))).Then(
+            If(Not(
+                Txn.fee() >= Int(2) * Global.min_txn_fee()
+            )).Then(
                 Reject()
             )
         ),
@@ -249,15 +245,10 @@ def approval_program():
         Approve(),
     )
 
-    on_cancel_pay_txn_index = Txn.group_index() - Int(1)
     on_cancel = Seq(
         Assert(
             And(
-                # the actual asset transfer is before the app call
-                Gtxn[on_cancel_pay_txn_index].type_enum() == TxnType.Payment,
-                Gtxn[on_cancel_pay_txn_index].sender() == Txn.sender(),
-                Gtxn[on_cancel_pay_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_cancel_pay_txn_index].amount() == Int(1000),
+                Txn.fee() >= Global.min_txn_fee() * Int(2),
                 
                 # swap_index
                 Txn.accounts.length() == Int(1),
@@ -271,16 +262,11 @@ def approval_program():
         Approve(),
     )
     
-    on_accept_pay_txn_index = Txn.group_index() - Int(2)
     on_accept_asset_txn_index = Txn.group_index() - Int(1)
     on_accept = Seq(
         Assert(
             And(
-                # payment to opt into asset and txn
-                Gtxn[on_accept_pay_txn_index].type_enum() == TxnType.Payment,
-                Gtxn[on_accept_pay_txn_index].sender() == Txn.sender(), #accepter
-                Gtxn[on_accept_pay_txn_index].amount() >= Int(2) * Global.min_txn_fee(),
-                Gtxn[on_accept_pay_txn_index].receiver() == Global.current_application_address(),
+                Txn.fee() >= Global.min_txn_fee() * Int(3),
                 
                 # the accept asset transfer is before the app call
                 Gtxn[on_accept_asset_txn_index].type_enum() == TxnType.AssetTransfer,

@@ -212,18 +212,6 @@ def place_swap(client: AlgodClient, app_id: int, offer: Account, offering_token_
         
     txns = []
     signed_txns = []
-    if len(tokens) == 3:
-        funding_amount = (
-            # min asset txn fee to return back old asset
-            + 1_000
-        )        
-        fund_app_txn = transaction.PaymentTxn(
-            sender=offer.get_address(),
-            receiver=app_address,
-            amt=funding_amount,
-            sp=suggested_params,
-        )
-        txns.append(fund_app_txn)
         
     token_txn = transaction.AssetTransferTxn(
         sender=offer.get_address(),
@@ -235,6 +223,9 @@ def place_swap(client: AlgodClient, app_id: int, offer: Account, offering_token_
     print(f"token_txn: {token_txn}")
     txns.append(token_txn)
 
+    if len(tokens) == 3:
+        suggested_params.fee = 2 * 1_000
+        
     app_call_txn = transaction.ApplicationCallTxn(
         sender=offer.get_address(),
         index=app_id,
@@ -248,11 +239,6 @@ def place_swap(client: AlgodClient, app_id: int, offer: Account, offering_token_
     
     transaction.assign_group_id(txns)
     
-    print('tokens', len(tokens))
-    if len(tokens) == 3:
-        signed_fund_txn = fund_app_txn.sign(offer.get_private_key())
-        signed_txns.append(signed_fund_txn)
-
     signed_token_txn = token_txn.sign(offer.get_private_key())
     signed_txns.append(signed_token_txn)
     
@@ -280,17 +266,7 @@ def cancel_swap(client: AlgodClient, app_id: int, offer: Account, swap_index: st
     token_id = offer_app_local_state[b"O_TKID"]
     suggested_params = client.suggested_params()
     
-    app_address = get_application_address(app_id)
-    funding_amount = 1_000
-
-    # this is needed for returning asset, cause application will pay
-    cancel_pay_txn = transaction.PaymentTxn(
-        sender=offer.get_address(),
-        receiver=app_address,
-        amt=funding_amount,
-        sp=suggested_params,
-    )
-    
+    suggested_params.fee = 2 * 1_000
     app_call_txn = transaction.ApplicationCallTxn(
         sender=offer.get_address(),
         index=app_id,
@@ -301,12 +277,8 @@ def cancel_swap(client: AlgodClient, app_id: int, offer: Account, swap_index: st
         sp=suggested_params,
     )
     
-    transaction.assign_group_id([cancel_pay_txn, app_call_txn])
-
-    signed_cancel_pay_txn = cancel_pay_txn.sign(offer.get_private_key())
     signed_app_call_txn = app_call_txn.sign(offer.get_private_key())
-    client.send_transactions([signed_cancel_pay_txn, signed_app_call_txn])
-    
+    client.send_transaction(signed_app_call_txn)    
     wait_for_confirmation(client, app_call_txn.get_txid())    
     
     # #do we need this store app opt out? cause the offer might wants to swap again later ?
@@ -362,18 +334,6 @@ def accept_swap(client: AlgodClient, app_id: int, accepter: Account, swap_index:
     
     if (is_opted_in_asset(client, offering_token_id, accepter.get_address()) == False):
         optin_asset(client, offering_token_id, accepter)
-        
-    funding_amount = (
-        # min asset txn fee on accept
-        + 1_000 * 2
-    )
-    
-    fund_app_txn = transaction.PaymentTxn(
-        sender=accepter.get_address(),
-        receiver=app_address,
-        amt=funding_amount,
-        sp=suggested_params,
-    )
     
     token_txn = transaction.AssetTransferTxn(
         sender=accepter.get_address(),
@@ -383,6 +343,7 @@ def accept_swap(client: AlgodClient, app_id: int, accepter: Account, swap_index:
         sp=suggested_params,
     )
     
+    suggested_params.fee = 3 * 1_000
     app_call_txn = transaction.ApplicationCallTxn(
         sender=accepter.get_address(),
         index=app_id,
@@ -397,12 +358,11 @@ def accept_swap(client: AlgodClient, app_id: int, accepter: Account, swap_index:
         sp=suggested_params,
     )
     
-    transaction.assign_group_id([fund_app_txn, token_txn, app_call_txn])
-    signed_fund_app_txn = fund_app_txn.sign(accepter.get_private_key())
+    transaction.assign_group_id([token_txn, app_call_txn])
     signed_token_txn = token_txn.sign(accepter.get_private_key())
     signed_app_call_txn = app_call_txn.sign(accepter.get_private_key())
     
-    client.send_transactions([signed_fund_app_txn, signed_token_txn, signed_app_call_txn])
+    client.send_transactions([signed_token_txn, signed_app_call_txn])
     wait_for_confirmation(client, app_call_txn.get_txid())
     
     return True

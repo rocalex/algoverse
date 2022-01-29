@@ -1,6 +1,6 @@
 # Bid Contract
 
-Bid contract has following 5 methods: 
+Bid contract has following 6 methods: 
 
 [on_create()](#on_create)
 
@@ -53,6 +53,7 @@ Group transaction:
   * App args: Start time, End time, Reserve amount, Min bid increment
   * Accounts: Rekeyed address for bid index to save bid information on local state
 
+
 ## on_cancel()
 Cancel opening bid
 
@@ -60,6 +61,9 @@ Single transaction: App call transaction
 
 * App call transaction
   * accounts: [bid_index]
+  * Fee >= 2_000
+
+### Inner transaction: Payment return transaction
 
 
 ## on_accept()
