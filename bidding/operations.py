@@ -213,11 +213,10 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
     pay_txn = transaction.PaymentTxn(
         sender=bidder.get_address(),
         receiver=app_address,
-        amt=bid_price, 
+        amt=bid_price + 4000, #4000 is for inner txns(1_000 is for asset txn, 3_000 is for split payment txn, this can be used as txn fee when canceling)
         sp=suggested_params,
     )
 
-    suggested_params.fee = 4_000 + 1_000 #4000 is for inner txns(1_000 is for asset txn, 3_000 is for split payment txn, this can be used as txn fee when canceling)
     app_call_txn = transaction.ApplicationCallTxn(
         sender=bidder.get_address(),
         index=app_id,

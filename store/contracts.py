@@ -117,7 +117,7 @@ def approval_program():
             And(
                 # accept asset txn call
                 Gtxn[on_asset_txn_index].type_enum() == TxnType.AssetTransfer,
-                Gtxn[on_asset_txn_index].receiver() == get_app_address(App.globalGet(bid_app_id_key)),
+                # Gtxn[on_asset_txn_index].receiver() == get_app_address(App.globalGet(bid_app_id_key)),
                 
                 # bid app accept call
                 Gtxn[on_sell_txn_index].type_enum() == TxnType.ApplicationCall,

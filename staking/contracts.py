@@ -208,7 +208,7 @@ def approval_program():
         # Assert(
         #     Txn.sender() == Global.creator_address(),
         # ),
-        closeAccountTo(Global.creator_address()),
+        # closeAccountTo(Global.creator_address()),
         Approve(),
     )
     

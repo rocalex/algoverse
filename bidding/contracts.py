@@ -210,7 +210,7 @@ def approval_program():
                 Gtxn[on_bid_txn_index].type_enum() == TxnType.Payment,
                 Gtxn[on_bid_txn_index].sender() == Txn.sender(),
                 Gtxn[on_bid_txn_index].receiver() == Global.current_application_address(),
-                Gtxn[on_bid_txn_index].amount() > Int(0),
+                Gtxn[on_bid_txn_index].amount() > Int(4) * Global.min_txn_fee(),
                 
                 # asset amount
                 Txn.application_args.length() == Int(2),
@@ -222,13 +222,10 @@ def approval_program():
                 
                 # rekeyed address
                 Txn.accounts.length() == Int(1),
-                
-                # for the future accept txns
-                Txn.fee() >= Int(5) * Global.min_txn_fee()
             )
         ),
         handle_bid(Txn.sender(), Txn.accounts[1], Txn.assets[0], 
-                   Btoi(Txn.application_args[1]), Gtxn[on_bid_txn_index].amount()),
+                   Btoi(Txn.application_args[1]), Gtxn[on_bid_txn_index].amount() - Int(4) * Global.min_txn_fee()),
         Approve(),
     )
     
@@ -307,12 +304,33 @@ def approval_program():
                 InnerTxnBuilder.Submit(),
             )
         )
+        
+    @Subroutine(TealType.none)
+    def closeAssetTo(assetID: Expr, account: Expr) -> Expr:
+        asset_holding = AssetHolding.balance(
+            Global.current_application_address(), assetID
+        )
+        return Seq(
+            asset_holding,
+            If(asset_holding.hasValue()).Then(
+                Seq(
+                    InnerTxnBuilder.Begin(),
+                    InnerTxnBuilder.SetFields(
+                        {
+                            TxnField.type_enum: TxnType.AssetTransfer,
+                            TxnField.xfer_asset: assetID,
+                            TxnField.asset_close_to: account,
+                        }
+                    ),
+                    InnerTxnBuilder.Submit(),
+                )
+            ),
+        )
 
     on_delete = Seq(
         # Assert(
         #     Txn.sender() == Global.creator_address(),
         # ),
-        closeAccountTo(Global.creator_address()),
         Approve(),
     )
     
