@@ -64,7 +64,7 @@ def create_auction_app(
         global_schema=global_schema,
         local_schema=local_schema,
         foreign_apps=[store_app_id],
-        accounts=[staking_address, team_wallet_address],
+        accounts=[staking_address.get_address(), team_wallet_address.get_address()],
         sp=sp,
     )
 

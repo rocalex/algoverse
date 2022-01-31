@@ -29,7 +29,7 @@ def get_contracts(client: AlgodClient) -> Tuple[bytes, bytes]:
 def create_store_app(client: AlgodClient, creator: Account) -> int:
     approval, clear = get_contracts(client=client)
     
-    global_schema = transaction.StateSchema(num_uints=5, num_byte_slices=0)
+    global_schema = transaction.StateSchema(num_uints=6, num_byte_slices=0)
     local_schema = transaction.StateSchema(num_uints=2, num_byte_slices=0)
     
     txn = transaction.ApplicationCreateTxn(

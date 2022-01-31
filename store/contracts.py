@@ -191,8 +191,6 @@ def approval_program():
     on_call = Cond(
         [on_call_method == Bytes("setup"), on_setup],
         [on_call_method == Bytes("reset"), on_reset],
-        [on_call_method == Bytes("set_sold"), on_set_sold],
-        [on_call_method == Bytes("set_bought"), on_set_bought],
         [on_call_method == Bytes("buy"), on_buy],
         [on_call_method == Bytes("sell"), on_sell],
         [on_call_method == Bytes("auction"), on_auction],
