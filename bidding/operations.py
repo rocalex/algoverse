@@ -271,8 +271,6 @@ def cancel_bid(client: AlgodClient, app_id: int, bidder: Account, bid_index: str
     #     optout_app(client, app_id, bidder)
     # else:
     #     return False
-    
-    return True
 
 
 def accept_bid(client: AlgodClient, app_id: int, seller: Account, bidder: str, bid_index: str) -> None:
@@ -348,8 +346,6 @@ def accept_bid(client: AlgodClient, app_id: int, seller: Account, bidder: str, b
     
     client.send_transactions([signed_asset_txn, signed_app_call_txn, signed_store_app_call_txn])
     wait_for_confirmation(client, app_call_txn.get_txid())
-
-    return True
 
 
 def close_bidding(client: AlgodClient, app_id: int, closer: Account, assets: List[int]):

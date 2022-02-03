@@ -283,8 +283,6 @@ def cancel_trade(client: AlgodClient, app_id: int, seller: Account, trading_inde
     # else:
     #     return False
 
-    return True
-
 
 def accept_trade(client: AlgodClient, app_id: int, buyer: Account, seller: str, trading_index: str) -> None:
     """Accept on an active trading.
@@ -358,8 +356,6 @@ def accept_trade(client: AlgodClient, app_id: int, buyer: Account, seller: str, 
     
     client.send_transactions([signed_pay_txn, signed_app_call_txn, signed_store_app_call_txn])
     wait_for_confirmation(client, app_call_txn.get_txid())
-    
-    return True
 
 
 def close_trading(client: AlgodClient, app_id: int, closer: Account, assets: List[int]):

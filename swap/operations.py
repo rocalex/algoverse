@@ -290,8 +290,6 @@ def cancel_swap(client: AlgodClient, app_id: int, offer: Account, swap_index: st
     # else:
     #     return False
 
-    return True
-
 
 def accept_swap(client: AlgodClient, app_id: int, accepter: Account, swap_index: str) -> None:
     """Accept on an active swap.
@@ -364,8 +362,6 @@ def accept_swap(client: AlgodClient, app_id: int, accepter: Account, swap_index:
     
     client.send_transactions([signed_token_txn, signed_app_call_txn])
     wait_for_confirmation(client, app_call_txn.get_txid())
-    
-    return True
 
 
 def close_swap(client: AlgodClient, app_id: int, closer: Account, assets: List[int]):

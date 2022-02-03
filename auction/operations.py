@@ -282,7 +282,6 @@ def place_bid(client: AlgodClient,
     client.send_transactions([signed_pay_txn, signed_app_call_txn])
 
     wait_for_confirmation(client, app_call_txn.get_txid())
-    return True
     
 
 def close_auction(client: AlgodClient, 
@@ -369,6 +368,4 @@ def close_auction(client: AlgodClient,
         client.send_transaction(signed_close_txn)
         
         wait_for_confirmation(client, signed_close_txn.get_txid())
-    
-    return True
 
