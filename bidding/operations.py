@@ -34,6 +34,8 @@ def create_bidding_app(
     client: AlgodClient,
     creator: Account,
     store_app_id: int,
+    staking_address: str,
+    team_wallet_address: str
 ) -> int:
     """Create a new bidding.
 
@@ -50,9 +52,6 @@ def create_bidding_app(
     global_schema = transaction.StateSchema(num_uints=1, num_byte_slices=2)
     local_schema = transaction.StateSchema(num_uints=3, num_byte_slices=1)
     
-    staking_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
-    team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
-    
     app_args = [
         # encoding.decode_address(staking_address.get_address()),
         # encoding.decode_address(team_wallet_address.get_address()),
@@ -68,7 +67,7 @@ def create_bidding_app(
         local_schema=local_schema,
         app_args=app_args,
         foreign_apps=[store_app_id],
-        accounts=[staking_address.get_address(), team_wallet_address.get_address()],
+        accounts=[staking_address, team_wallet_address],
         sp=sp,
     )
     signed_txn = txn.sign(creator.get_private_key())

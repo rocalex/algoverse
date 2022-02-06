@@ -33,7 +33,9 @@ def get_contracts(client: AlgodClient) -> Tuple[bytes, bytes]:
 def create_auction_app(
     client: AlgodClient,
     creator: Account,
-    store_app_id: int
+    store_app_id: int,
+    staking_address: str,
+    team_wallet_address: str
 ) -> int:
     """Create a new auction.
 
@@ -53,9 +55,6 @@ def create_auction_app(
     local_schema = transaction.StateSchema(num_uints=8, num_byte_slices=2)
     sp = client.suggested_params()
     
-    staking_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
-    team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
-    
     txn = transaction.ApplicationCreateTxn(
         sender=creator.get_address(),
         on_complete=transaction.OnComplete.NoOpOC,
@@ -64,7 +63,7 @@ def create_auction_app(
         global_schema=global_schema,
         local_schema=local_schema,
         foreign_apps=[store_app_id],
-        accounts=[staking_address.get_address(), team_wallet_address.get_address()],
+        accounts=[staking_address, team_wallet_address],
         sp=sp,
     )
 

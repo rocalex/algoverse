@@ -34,6 +34,8 @@ def create_trading_app(
     client: AlgodClient,
     creator: Account,
     store_app_id: int,
+    staking_address: str,
+    team_wallet_address: str
 ) -> int:
     """Create a new trading.
 
@@ -56,12 +58,6 @@ def create_trading_app(
     global_schema = transaction.StateSchema(num_uints=1, num_byte_slices=2)
     local_schema = transaction.StateSchema(num_uints=3, num_byte_slices=1)
     
-    staking_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
-    team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
-    
-    app_args = [
-        store_app_id.to_bytes(8, "big"),
-    ]
     sp = client.suggested_params()
 
     txn = transaction.ApplicationCreateTxn(

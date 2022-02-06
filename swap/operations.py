@@ -32,7 +32,9 @@ def get_contracts(client: AlgodClient) -> Tuple[bytes, bytes]:
 
 def create_swap_app(
     client: AlgodClient,
-    creator: Account
+    creator: Account,
+    staking_address: str,
+    team_wallet_address: str
 ) -> int:
     """Create a new swap.
 
@@ -55,9 +57,6 @@ def create_swap_app(
     global_schema = transaction.StateSchema(num_uints=0, num_byte_slices=2)
     local_schema = transaction.StateSchema(num_uints=4, num_byte_slices=1)
     
-    staking_address = Account.from_mnemonic(os.environ.get("CREATOR_MN"))
-    team_wallet_address = Account.from_mnemonic(os.environ.get("TEAM_MN"))
-    
     sp = client.suggested_params()
 
     txn = transaction.ApplicationCreateTxn(
@@ -68,7 +67,7 @@ def create_swap_app(
         global_schema=global_schema,
         local_schema=local_schema,
         app_args=[],
-        accounts=[staking_address.get_address(), team_wallet_address.get_address()],
+        accounts=[staking_address, team_wallet_address],
         sp=sp,
     )
     signed_txn = txn.sign(creator.get_private_key())
