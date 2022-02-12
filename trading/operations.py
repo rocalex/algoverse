@@ -69,7 +69,7 @@ def create_trading_app(
         local_schema=local_schema,
         app_args=[],
         foreign_apps=[store_app_id],
-        accounts=[staking_address.get_address(), team_wallet_address.get_address()],
+        accounts=[staking_address, team_wallet_address],
         sp=sp,
     )
     signed_txn = txn.sign(creator.get_private_key())
