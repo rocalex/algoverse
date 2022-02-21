@@ -201,7 +201,7 @@ def place_swap(client: AlgodClient, app_id: int, offer: Account, offering_token_
         n_address = unused_rekeyed_address
         if not n_address:
             optin_price = 100000 + 28500 * 4 + 50000 * 1 + 1000
-            n_address = generate_rekeyed_address(client, offer, optin_price)
+            n_address = generate_rekeyed_address(client, offer, app_id, optin_price)
             optin_app_rekeyed_address(client, app_id, offer, n_address)
             set_rekeyed_address(offer.get_address(), n_address, 1)
     else:

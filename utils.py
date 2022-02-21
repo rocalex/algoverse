@@ -263,12 +263,13 @@ def generate_account_keypair():
     return private_key, address
     
 
-def generate_rekeyed_address(client: AlgodClient, rekey_to: Account, optin_price: int):
+def generate_rekeyed_address(client: AlgodClient, funder: Account, app_id: int, optin_price: int):
     """Generate rekeyed address and charge balance to optin app.   
 
     Args:
         client: An Algod client.
         rekey_to: Auth address.
+        app_id: App id to optin.
         optin_price: Additional min balance to optin app.
     """
     private_key, address = generate_account_keypair()
@@ -283,12 +284,12 @@ def generate_rekeyed_address(client: AlgodClient, rekey_to: Account, optin_price
     )
 
     fund_account_txn = transaction.PaymentTxn(
-        sender=rekey_to.get_address(),
+        sender=funder.get_address(),
         receiver=address,
         amt=funding_amount,
         sp=client.suggested_params(),
     )
-    signed_fund_txn = fund_account_txn.sign(rekey_to.get_private_key())
+    signed_fund_txn = fund_account_txn.sign(funder.get_private_key())
     client.send_transaction(signed_fund_txn)
     wait_for_confirmation(client, signed_fund_txn.get_txid())
     
@@ -296,7 +297,7 @@ def generate_rekeyed_address(client: AlgodClient, rekey_to: Account, optin_price
         sender=address,
         receiver=address,
         amt=0,
-        rekey_to=rekey_to.get_address(),
+        rekey_to=get_app_address(app_id),
         sp=client.suggested_params(),
     )
     

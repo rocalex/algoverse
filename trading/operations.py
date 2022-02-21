@@ -200,7 +200,7 @@ def place_trade(client: AlgodClient, app_id: int, seller: Account, token_id: int
         n_address = unused_rekeyed_address
         if not n_address:
             optin_price = 100000 + 28500 * 3 + 50000 * 1 + 1000
-            n_address = generate_rekeyed_address(client, seller, optin_price)
+            n_address = generate_rekeyed_address(client, seller, app_id, optin_price)
             optin_app_rekeyed_address(client, app_id, seller, n_address)
             set_rekeyed_address(seller.get_address(), n_address, 1)
     else:

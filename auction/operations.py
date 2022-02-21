@@ -209,7 +209,7 @@ def get_usable_rekeyed_address(client: AlgodClient, auther: Account, app_id: int
     # if not found, create one, and optin app for local state
     if not n_address:
         optin_price = 100000 + 28500 * 8 + 50000 * 2 + 1000
-        n_address = generate_rekeyed_address(client, auther, optin_price)
+        n_address = generate_rekeyed_address(client, auther, app_id, optin_price)
         optin_app_rekeyed_address(client, app_id, auther, n_address)
         set_rekeyed_address(auther.get_address(), n_address, 1)
         
