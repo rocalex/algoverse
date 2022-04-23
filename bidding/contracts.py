@@ -192,10 +192,12 @@ def approval_program():
                 Gtxn[0].type_enum() == TxnType.Payment,
                 Gtxn[0].sender() == Txn.sender(),
                 Gtxn[0].receiver() == Global.current_application_address(),
-                Gtxn[0].amount() >= Global.min_balance() + Global.min_txn_fee(),
+                Gtxn[0].amount() >= Global.min_balance(),
                 
                 Txn.assets.length() == Int(1),
                 Txn.assets[0] > Int(0),
+                
+                Txn.fee() >= Global.min_txn_fee() * Int(2),
             )
         ),
         optin_asset(Txn.assets[0]),

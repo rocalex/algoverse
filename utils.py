@@ -12,6 +12,9 @@ from account import Account
 from algosdk import account, mnemonic
 import json
 
+import base64
+import hashlib
+
 
 def get_algod_client(url, token) -> AlgodClient:
     headers = {
@@ -297,7 +300,7 @@ def generate_rekeyed_address(client: AlgodClient, funder: Account, app_id: int, 
         sender=address,
         receiver=address,
         amt=0,
-        rekey_to=get_app_address(app_id),
+        rekey_to=funder.get_address(),  #get_app_address(app_id),
         sp=client.suggested_params(),
     )
     
@@ -394,3 +397,24 @@ def send_asset(client: AlgodClient, asset_id: int, asset_amount: int, sender: Ac
     signed_txn = txn.sign(sender.get_address())
     client.send_transaction(signed_txn)
     wait_for_confirmation(client, signed_txn.get_txid())
+    
+def hashMetaData(json_metadata: str) :
+    extra_metadata_base64 = "iHcUslDaL/jEM/oTxqEX++4CS8o3+IZp7/V5Rgchqwc="
+    extra_metadata = base64.b64decode(extra_metadata_base64)
+    
+    h = hashlib.new("sha512_256")
+    h.update(b"arc0003/amj")
+    h.update(json_metadata.encode("utf-8"))
+    json_metadata_hash = h.digest()
+
+    h = hashlib.new("sha512_256")
+    h.update(b"arc0003/am")
+    h.update(json_metadata_hash)
+    h.update(extra_metadata)
+    am = h.digest()
+
+    print("Asset metadata in base64: ")
+    print(base64.b64encode(am).decode("utf-8"))
+    #return base64.b64encode(am)
+
+    return am

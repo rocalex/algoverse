@@ -233,12 +233,11 @@ def approval_program():
                 Btoi(Txn.application_args[1]) > Int(0),
             )
         ),
-        If (is_open(Txn.sender(), Txn.accounts[1])).Then(
-            If(Not(
-                Txn.fee() >= Int(2) * Global.min_txn_fee()
-            )).Then(
-                Reject()
-            )
+        If (And(
+            is_open(Txn.sender(), Txn.accounts[1]),
+            Txn.fee() < Int(2) * Global.min_txn_fee()
+        )).Then(
+            Reject()
         ),
         handle_swap(Txn.sender(), Txn.accounts[1], Txn.assets[0], Gtxn[on_swap_asset_txn_index].asset_amount(), 
                     Txn.assets[1], Btoi(Txn.application_args[1])),

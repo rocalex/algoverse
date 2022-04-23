@@ -122,15 +122,21 @@ def setup_trading_app(
         token_id: The NFT ID.
     """
     
+    app_address = get_application_address(app_id)
     params = client.suggested_params()
-    optin_asset_fee = (
-        # min optin asset fee
-        100_000
-        # min txn fee
-        + 1_000
-    )
-    params.fee = optin_asset_fee + 1_000
     
+    funding_amount = (
+        # opt into asset min balance
+        + 100_000
+    )
+    pay_txn = transaction.PaymentTxn(
+        sender=funder.get_address(),
+        receiver=app_address,
+        amt=funding_amount,
+        sp=params,
+    )
+    params.fee = 2000 # including min txn fee for in app opt into asset
+        
     setup_txn = transaction.ApplicationCallTxn(
         sender=funder.get_address(),
         index=app_id,
@@ -140,8 +146,12 @@ def setup_trading_app(
         sp=params,
     )
 
+    transaction.assign_group_id([pay_txn, setup_txn])
+    
+    signed_pay_txn = pay_txn.sign(funder.get_private_key())
     signed_setup_txn = setup_txn.sign(funder.get_private_key())
-    client.send_transaction(signed_setup_txn)        
+    
+    client.send_transactions([signed_pay_txn, signed_setup_txn])
     wait_for_confirmation(client, signed_setup_txn.get_txid())
     
     

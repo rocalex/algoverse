@@ -121,8 +121,6 @@ def setup_bidding_app(
     funding_amount = (
         # opt into asset min balance
         + 100_000
-        # min txn fee for opt into asset
-        + 1_000
     )
     pay_txn = transaction.PaymentTxn(
         sender=funder.get_address(),
@@ -131,6 +129,7 @@ def setup_bidding_app(
         sp=params,
     )
 
+    params.fee = 2000 # min inapp txn fee for opt into asset + app call txn fee
     setup_txn = transaction.ApplicationCallTxn(
         sender=funder.get_address(),
         index=app_id,
@@ -226,6 +225,11 @@ def place_bid(client: AlgodClient, app_id: int, bidder: Account, token_id: int, 
         sp=suggested_params,
     )
 
+    print(f"app_id", app_id)
+    print(f"app_args", [b"bid", bid_amount.to_bytes(8, "big")])
+    print(f"foreign_assets", tokens)
+    print(f"accounts", [n_address])
+    
     transaction.assign_group_id([pay_txn, app_call_txn])
     
     signed_pay_txn = pay_txn.sign(bidder.get_private_key())
